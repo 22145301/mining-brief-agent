@@ -7,6 +7,12 @@
 *.jpg  binary
 *.pdf  binary
 
+# fixture 是**逐字节原始响应**，必须原样往返（ADR-0002）。
+# `-text` 关掉一切换行符转换：否则 CRLF→LF 会让 clone 出来的字节与抓取当时不同，
+# 既破坏"回放 == 真实抓取"的前提，也让 sources.json 里记的 sha256 对不上。
+# `tests/test_fixtures.py` 就是盯着这条的。
+fixtures/** -text
+
 # lock 文件不参与 diff 统计，也不折叠
 package-lock.json -diff linguist-generated
 pnpm-lock.yaml   -diff linguist-generated

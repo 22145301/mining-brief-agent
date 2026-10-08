@@ -70,8 +70,13 @@ ignore = [
 # cli.py 要把产物路径写到 stdout（PRD §5.3 的硬契约）。它用的是显式的
 # sys.stdout.write 而不是 print，因此这条豁免实际不会被用到 —— 留在这里是为了
 # 在有人"顺手"把 stdout 契约改成 print 时报错，而不是悄悄放行。
+#
+# B008：Typer 的**唯一**写法就是把 `typer.Option(...)` / `typer.Argument(...)` 写在
+# 参数默认值里（它靠读签名拿元数据）。这是 bugbear 对 Typer 的已知误报，不是我们
+# 真的在默认值里做副作用 —— 因此只对 cli.py 关掉，其余文件照常受管。
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["T20"]
+"mining_brief/cli.py" = ["B008"]
 
 # ---------------------------------------------------------------------------
 # Black：格式化

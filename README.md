@@ -32,9 +32,9 @@ parse_intent → resolve_entities → check_scope ─┼─ fetch_prices ──�
 ## 装 / 跑 / 测
 
 ```bash
-uv sync --all-extras                              # 装（含浏览器与 PDF 解析这两个可选 extra）
-uv run mining-brief "给我生成一份关于 Pilbara 锂矿的今日简报"   # 跑
-uv run pytest                                     # 测（默认离线、确定性）
+uv sync --all-extras                                          # 装（含浏览器与 PDF 解析这两个可选 extra）
+uv run mining-brief brief "给我生成一份关于 Pilbara 锂矿的今日简报"   # 跑
+uv run pytest                                                 # 测（默认离线、确定性）
 ```
 
 默认模式**不需要任何 API key、不联网、结果确定**。`--live` 是唯一的实时开关。

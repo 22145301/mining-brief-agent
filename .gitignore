@@ -31,6 +31,12 @@ npm-debug.log*
 *.db
 *.sqlite3
 
+# 日报产物 —— 每次跑都重新生成，不入库（内容由 fixtures 完全决定，可复现）
+briefs/
+
+# 抓取脚本的临时暂存区
+fixtures/.staging/
+
 # Word / Office 临时锁文件
 ~$*
 

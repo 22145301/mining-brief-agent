@@ -1,0 +1,68 @@
+{
+  "anchor_at": "2026-10-08T17:01:57.311481+00:00",
+  "entries": [
+    {
+      "url": "https://www.australianmining.com.au/best-of-the-best-tunkillias-golden-finale-for-barton-gold/",
+      "path": "articles/best-of-the-best-tunkillias-golden-finale-for-barton-gold.html",
+      "sha256": "ff5ffbc9ef592a19c7ccb6e1b2824392b6f0017020921990a2eea75b9fa3c52f",
+      "fetched_at": "2026-10-08T17:10:33.285785+00:00",
+      "content_type": "text/html; charset=UTF-8",
+      "status": 200,
+      "bytes": 198853
+    },
+    {
+      "url": "https://www.australianmining.com.au/bhp-offloads-kambalda-concentrator-to-gold-fields/",
+      "path": "articles/bhp-offloads-kambalda-concentrator-to-gold-fields.html",
+      "sha256": "8a4e38f9bd4cb77445c28a23124617194ded0263032e497932922c2a351c5879",
+      "fetched_at": "2026-10-08T17:10:33.586010+00:00",
+      "content_type": "text/html; charset=UTF-8",
+      "status": 200,
+      "bytes": 191866
+    },
+    {
+      "url": "https://www.australianmining.com.au/feed/",
+      "path": "news/australian-mining-feed.xml",
+      "sha256": "b107775eb918e0ec428c8cdc2e1abf8fcd35de5fc4d4fce1872ed8f9f494b791",
+      "fetched_at": "2026-10-08T17:01:57.310195+00:00",
+      "content_type": "application/rss+xml; charset=UTF-8",
+      "status": 200,
+      "bytes": 26965
+    },
+    {
+      "url": "https://www.australianmining.com.au/finlayson-calls-northern-star-approach-opportunistic/",
+      "path": "articles/finlayson-calls-northern-star-approach-opportunistic.html",
+      "sha256": "93f23c8260587f6402a870ba923854d14b45520912bff054d9b7693acaf509b6",
+      "fetched_at": "2026-10-08T17:10:34.504951+00:00",
+      "content_type": "text/html; charset=UTF-8",
+      "status": 200,
+      "bytes": 196472
+    },
+    {
+      "url": "https://www.australianmining.com.au/mach-energy-commits-to-responsible-operation-following-court-ruling/",
+      "path": "articles/mach-energy-commits-to-responsible-operation-following-court-ruling.html",
+      "sha256": "b6c4264271dc576ab59e736f257268b25c933387570674c7d6b6bbe78c24330d",
+      "fetched_at": "2026-10-08T17:10:31.921582+00:00",
+      "content_type": "text/html; charset=UTF-8",
+      "status": 200,
+      "bytes": 247025
+    },
+    {
+      "url": "https://www.australianmining.com.au/stellar-extends-tin-zone-at-heemskirk-project/",
+      "path": "articles/stellar-extends-tin-zone-at-heemskirk-project.html",
+      "sha256": "45335d4c07e1d2a4c3cf18aea64274760c55cacd4cbcf16d5ce2bd5daff112cd",
+      "fetched_at": "2026-10-08T17:10:32.953049+00:00",
+      "content_type": "text/html; charset=UTF-8",
+      "status": 200,
+      "bytes": 246720
+    },
+    {
+      "url": "https://www.mining.com/feed/",
+      "path": "news/mining-com-feed.xml",
+      "sha256": "000184f5103012a90cf51f87fcc1cc634a8a544637f1be546b3588fa9514d5ff",
+      "fetched_at": "2026-10-08T17:01:56.284273+00:00",
+      "content_type": "application/rss+xml; charset=UTF-8",
+      "status": 200,
+      "bytes": 260039
+    }
+  ]
+}

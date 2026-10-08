@@ -25,6 +25,11 @@ def configure_logging(level: str | None = None) -> None:
     resolved = (level or os.environ.get("MINING_LOG_LEVEL") or "INFO").upper()
 
     logging.basicConfig(format="%(message)s", stream=sys.stderr, level=resolved)
+    # 第三方库的默认 INFO 太吵（httpx 每次请求、mcp 每次协议往返都打一条）。
+    # 只有把 MINING_LOG_LEVEL 调到 DEBUG 时才放开 —— 排查问题时才需要它们。
+    if resolved != "DEBUG":
+        for noisy in ("mcp", "httpx", "httpcore", "openai"):
+            logging.getLogger(noisy).setLevel(logging.WARNING)
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,

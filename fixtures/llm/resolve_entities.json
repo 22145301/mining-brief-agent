@@ -1,0 +1,7 @@
+{
+  "node": "resolve_entities",
+  "responses": {
+    "resolve_entities:0356bb4a65ae101c": "{\"project\": \"pilgangoora\"}",
+    "resolve_entities:6c9283263cf9955a": "{\"project\": null}"
+  }
+}

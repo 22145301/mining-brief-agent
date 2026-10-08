@@ -1,0 +1,8 @@
+{
+  "node": "parse_intent",
+  "responses": {
+    "parse_intent:0a90688f76472716": "{\"intent\": \"briefing\", \"commodity\": \"lithium\", \"mine\": \"Pilbara\", \"window_days\": 7}",
+    "parse_intent:73381a3d9fa55a33": "{\"intent\":\"out_of_scope\",\"commodity\":\"copper\",\"mine\":null,\"window_days\":7}",
+    "parse_intent:b5a727304da05596": "{\"intent\":\"briefing\",\"commodity\":\"copper\",\"mine\":\"Escondida\",\"window_days\":3}"
+  }
+}
