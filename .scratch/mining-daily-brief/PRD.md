@@ -276,9 +276,9 @@ parse_intent → resolve_entities → check_scope ─┼─ fetch_prices ──�
 
 | CLAUDE.md 要求 | 落实 |
 |---|---|
-| 一键可运行 | `docker compose up` 单条命令；README 写清安装/运行/测试三条命令 |
+| 一键可运行 | `docker compose up` 单条命令；README 与 RUN.md 写清安装/运行/测试三条命令 |
 | 依赖显式锁定 | `pyproject.toml` + lock 文件 |
-| 分层结构 | `servers/`（MCP）/ `agent/`（编排）/ `datasources/`（抓取）/ `config/` |
+| 分层结构 | 单包 `mining_brief/`：`contracts`（返回信封与共享数据结构）/ `datasources` / `servers`（MCP）/ `agent`（编排）/ `config` 子包（ADR-0008） |
 | 测试 | 每个 server 工具级单测 + 端到端 golden case |
 | 配置外置 | `.env.example`；密钥不入库 |
 | 错误处理与日志 | 统一异常 + 结构化日志；**禁裸 `print`** |
@@ -286,6 +286,16 @@ parse_intent → resolve_entities → check_scope ─┼─ fetch_prices ──�
 | CI | GitHub Actions 跑 lint + test，README 挂 badge |
 | 容器 | `Dockerfile` 默认 slim；**浏览器进可选 extra**（LME 需要），缺浏览器时明确报错不静默降级 |
 | ADR | `docs/adr/`，把本次需求的每个取舍落成文 |
+
+### 11.1 交付清单：README.md 与 RUN.md 分工
+
+题面 task #2 点名的交付文件是 `RUN.md`（"我们能在 5 分钟内跑起来，含一条 docker-compose"），而 CLAUDE.md 要求 README 写清安装/运行/测试。**两个都写，各司其职，不复制内容**：
+
+- `README.md` —— 门面：项目是什么、架构一页、装/跑/测三条命令、badge、指向 `docs/adr/`。第一屏显眼处指向 `RUN.md`。
+- `RUN.md` —— 题面点名的 5 分钟快速通道：clone → `docker compose up` → 产物在哪，随后才是三条本地命令。
+- `mcp-config.json` —— 与题面同名放根目录；RUN.md 说明怎么挂进 Claude Desktop / Cursor 手玩三个工具，这正好补上 ADR-0001 刻意未覆盖的 stdio 传输。
+
+`docker compose up` 只起**一个** `brief` 服务：跑完整链路、把日报写到挂载出来的 `out/`。这不只是应付"一键可运行"——回放模式**不需要任何密钥、不联网、结果确定**（ADR-0002 冻时钟 + ADR-0009 按输入哈希取 LLM 录播），因此陌生人没有 API key 也能跑出日报。三个 MCP server 不进 compose：默认路径是进程内协议连接，stdio 那三个 server 由 `mcp-config.json` 挂到宿主里用，本就不是常驻服务。
 
 ---
 
