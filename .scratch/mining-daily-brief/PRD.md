@@ -184,6 +184,8 @@ parse_intent → resolve_entities → check_scope ─┼─ fetch_prices ──�
 | 8 | `verify_citations` | 纯函数 | `[n]` 必须指回真实工具返回值 | 不通过 → 报错 |
 | 9 | `render` | 纯函数 | 写文件 + 打印路径 | — |
 
+> **注**：上表"失败时"一列对**纯函数节点**的含义与 fetch 节点不同。fetch 节点面对的是环境（网络、网页改版），必须兜底；纯函数节点面对的是上游信封，上游降级时它按契约返回空（表里那格说的就是这个），而它自己**抛异常只可能是代码 bug**，就该响亮地炸。详见 `docs/adr/0006-fetch-nodes-catch-their-own-failures.md`。
+
 **三个关键形状：**
 
 1. **4a / 4b / 4c 并行**（LangGraph superstep）。它们互不依赖，且各自需要独立的超时、重试、失败降级。**这是"为什么用图而不是顺序脚本"的全部答案。**
