@@ -1,0 +1,23 @@
+# 镜像里只需要：依赖清单、包源码、录播数据。
+# 其余一概不进构建上下文 —— .venv 一个目录就比整个仓库大十倍，
+# 而它进上下文既拖慢构建，又会在 COPY 时把宿主机的解释器覆盖进镜像。
+
+.venv/
+.git/
+.github/
+.scratch/
+.claude/
+briefs/
+docs/
+tests/
+scripts/
+*.md
+!README.md
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.env
+.env.*

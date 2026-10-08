@@ -1,6 +1,11 @@
 # 矿权日报 Agent
 
+[![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci.yml)
+
 > ⏱ **只想快点跑起来？** 直接看 [`RUN.md`](RUN.md) —— clone 到产出日报，5 分钟。
+>
+> badge 里的 `OWNER/REPO` 是**全仓库唯一需要替换的占位**：badge 指向 GitHub 上的
+> Actions 结论，而本仓库当前没有 git remote（还没推上去）。推之前替换一次即可。
 
 对系统说一句自然语言（如"给我生成一份关于 Pilbara 锂矿的今日简报"），拿到一份 Markdown 矿权日报：**每个事实都能回溯到原始来源，缺什么也明说。**
 
@@ -37,7 +42,24 @@ uv run mining-brief brief "给我生成一份关于 Pilbara 锂矿的今日简�
 uv run pytest                                                 # 测（默认离线、确定性）
 ```
 
-默认模式**不需要任何 API key、不联网、结果确定**。`--live` 是唯一的实时开关。
+不装 uv 也行：`docker compose up` 跑同一件事（跑完即退，产物落在挂载出来的 `./briefs/`，
+与本地跑逐字节相同 —— 镜像里跑的也是回放）。两条路的取舍见 [`RUN.md`](RUN.md)。
+
+默认模式**不需要任何 API key、不联网、结果确定**。代价写在明面上：**回放只认录过的输入**，
+换一句没录过的话它会报 `LLMReplayMiss` 而不是偷偷去调模型（ADR-0009）——离线可问的就是
+`scripts/record_llm.py` 里那三条样例句。`--live` 是唯一的实时开关。
+
+### 开发闸门（CI 跑的就是这四条）
+
+```bash
+uv run ruff check . && uv run ruff format --check .   # lint + 格式化
+uv run mypy                                           # 严格模式，覆盖 tests/
+uv run pytest                                         # 默认套件：离线、确定性
+uv run pytest -m stdio                                # 真子进程走 stdio 传输
+```
+
+格式化**只有一个权威**（ruff）。Black 与 `ruff format` 对同一份文件会给出不同结果，
+两个都挂只会让 CI 取决于谁先跑 —— 实测记录写在 `pyproject.toml` 里。
 
 ### 挂进 MCP 宿主（Claude Desktop / Cursor / Claude Code）
 
@@ -141,14 +163,25 @@ LME 官网整站挂在 Cloudflare 后面：`httpx`、`urllib`、`curl` 直取**�
 
 题面把 Indicated / Inferred 称作"储量"，这是笔误 —— 它们是**资源量（Resource）**，与 Proven / Probable 的**储量（Reserve）**是不同类别。本项目的处理：产出物节标题沿用题面的「储量数据」，但节内数据严格按真实类别标注。详见 [`CONTEXT.md`](CONTEXT.md)。
 
+### 风险规则：只留能逐字引到权威原文的
+
+**规则集被收窄过，收窄本身是这份交付的一部分。** 「风险信号」这个词只有在**每条规则的判据都是权威原文里的一句话**时才不作废，否则它会退化成"随便什么观察"。
+
+- 规则集冻结在 [`docs/risk-rules.md`](docs/risk-rules.md)：4 条规则，`verbatim` 一律从 **JORC 2012**、**ASX Listing Rules Ch.5**、**NI 43-101（CSA Notice 版）** 三份权威文件里**逐字抄**来，不改写、不翻译；每份文件给了 URL + 字节数 + sha256，评审人可自行下载比对。
+- **够不上逐字引的，降级为"提示"而不是信号**，并且必须写明"为什么它不是信号"。产物里这是**两个不同字段**（`RiskSignal` / `Hint`），不是同一列表里的两种语气。
+- 三处如实记下的局限：`pypdf` 提取会吃掉 `ff`/`fi` 连字（引用时逐条核对过上下文）；GN31 那份没留档、**事后无从按哈希复验**，因此只作旁证、不作 `source_url`；PRD 说"ASX LR 5.16 的法定警示句"**是对的**，但"合资格人署名"那组要求其实在 5.22。
+
 ## 交付物
 
 | 文件 | 内容 |
 |---|---|
 | [`RUN.md`](RUN.md) | 题面点名的 5 分钟通道：clone → `docker compose up` → 产物在哪 |
+| [`Dockerfile`](Dockerfile) / [`docker-compose.yml`](docker-compose.yml) | 单服务、跑完即退、零凭证零网络的容器通道 |
 | [`mcp-config.json`](mcp-config.json) | 把三个 server 挂进 Claude Desktop / Cursor（与题面同名放根目录） |
 | [`CONTEXT.md`](CONTEXT.md) | 领域术语表，产出物与代码的用词一律以此为准 |
+| [`docs/risk-rules.md`](docs/risk-rules.md) | 风险规则集的逐字原文、出处与哈希（工单 02 的取证记录） |
 | [`docs/adr/`](docs/adr/) | 九条关键取舍的完整记录 |
+| [`.env.example`](.env.example) | 全部环境变量与语义；**任何密钥只走环境变量**，`.env` 不入库 |
 
 ## 设计决策
 

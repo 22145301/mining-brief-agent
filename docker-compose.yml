@@ -1,0 +1,25 @@
+# 一条命令跑完整链路：`docker compose up`。
+#
+# 只有**一个**服务，而且它跑完就退 —— 这不是常驻服务，别指望它 `up -d` 之后还在。
+# 之所以能做到"不需要任何凭证"，是因为默认模式是回放：数据读 fixture、LLM 读录播、
+# 时钟取 fixture 锚点（ADR-0002）。所以评审人不必配 key、不必联网，就能拿到一份
+# 与开发机上逐字节相同的日报。
+#
+# 顶层的 `name` 不是装饰：compose 默认拿**目录名**当项目名，而目录名是中文时
+# 它会推成一个空串，直接以 "project name must not be empty" 退出。
+name: mining-brief
+
+services:
+  brief:
+    build: .
+    image: mining-brief:local
+    environment:
+      MINING_DATA_MODE: replay
+      MINING_LLM_MODE: replay
+      MINING_OUTPUT_DIR: /out
+    volumes:
+      # 产物落在这里。挂的是目录而不是单文件 —— 日报按数据时点命名，名字事先不知道。
+      - ./briefs:/out
+    # compose 的 `command` 会**整条替换** Dockerfile 的 CMD，所以这里要从可执行文件
+    # 开始写全。换一句话问：`docker compose run --rm brief mining-brief brief "…"`。
+    command: ["mining-brief", "brief", "给我生成一份关于 Pilbara 锂矿的今日简报"]
