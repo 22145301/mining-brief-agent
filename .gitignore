@@ -50,3 +50,8 @@ desktop.ini
 # Claude Code 本地设置与技能定义（个人工具链，不进仓库）
 .claude/settings.local.json
 .claude/skills/
+
+# 工单 02 的取证临时区：JORC / ASX / NI 43-101 的原件与文本提取。
+# 不入库的理由：第三方版权文件，且体积大；可复现性靠 docs/risk-rules.md 里
+# 的 URL + sha256，不靠把 PDF 存进仓库。
+.scratch/jorc-src/
