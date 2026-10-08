@@ -5,14 +5,23 @@
 ## 目录约定
 
 - 一个 feature 一个目录：`.scratch/<feature-slug>/`
-- spec 为 `.scratch/<feature-slug>/PRD.md`
+- 需求冻结在 `.scratch/<feature-slug>/PRD.md`，**不随实现改动**
+- spec 为 `.scratch/<feature-slug>/spec.md`（由 `/to-spec` 从 PRD 综合而来）
 - 工单一张一个文件：`.scratch/<feature-slug>/issues/<NN>-<slug>.md`，从 `01` 起编号，**禁止**把多张工单合并成一个 tickets 文件
-- state 角色记在工单文件顶部的 `**Status:**` 行（取值见 `triage-labels.md`）
+- 工单文件顶部的 `**Status:**` 行记 state 角色、`**Category:**` 行记 category 角色（取值见 `triage-labels.md`）
 - 评论与讨论历史追加到文件底部的 `## Comments` 标题下
 
-## spec 文件名是 PRD.md，不是 spec.md
+## 为什么 spec 与 PRD 是两个文件
 
-上游模板默认 spec 叫 `spec.md`，本仓库沿用 `PRD.md`。经核实这是**安全偏离**：没有任何技能硬编码该文件名 —— `to-tickets` 从调用参数取 spec 路径，`code-review` 在 `docs/`、`specs/`、`.scratch/` 下按 feature 名模糊匹配 spec 文件。
+最初配置时把两者等同了（"spec 就叫 `PRD.md`"），那是还没走到 `/to-spec` 时的误判。实际走到这一步才发现它们不是一回事：
+
+| | `PRD.md` | `spec.md` |
+|---|---|---|
+| 内容 | 需求（问题、目标、契约、验收标准） | 实现规格（用户故事、实现决策、测试切面） |
+| 生命周期 | 冻结，17 轮拷问的产物，**不随实现改动** | 实现期可修订 |
+| 谁写 | 用户与我一起 | `/to-spec` 从 PRD 综合 |
+
+同一个文件里混两种生命周期，会让"需求变了没有"这个问题失去答案。`to-tickets` 从调用参数取 spec 路径，因此这个偏离不影响技能链。
 
 `<feature-slug>` 用小写连字符，当前唯一 feature 是 `mining-daily-brief`。
 
