@@ -23,8 +23,7 @@ from mining_brief.config.settings import ConfigError, Settings
 app = typer.Typer(
     name="mining-brief",
     help=(
-        "矿权日报 Agent —— 输入一句自然语言，"
-        "输出一份每个事实都能回溯到原始来源的 Markdown 日报。"
+        "矿权日报 Agent —— 输入一句自然语言，输出一份每个事实都能回溯到原始来源的 Markdown 日报。"
     ),
     add_completion=False,
     no_args_is_help=True,
