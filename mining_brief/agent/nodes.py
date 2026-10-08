@@ -576,7 +576,8 @@ def _prices_section(state: BriefState, ledger: CitationLedger) -> Section:
         facts.append(
             Fact(
                 text=(
-                    f"{latest.commodity} {latest.value} {latest.currency}/{latest.unit}"
+                    f"{_COMMODITY_ZH.get(commodity, commodity)} {latest.value} "
+                    f"{latest.currency}/{latest.unit}"
                     f"（{latest.exchange} {latest.symbol}，"
                     f"{latest.as_of}，{'，'.join(qualifiers)}）"
                 ),

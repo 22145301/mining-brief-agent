@@ -2,6 +2,87 @@
   "anchor_at": "2026-10-08T17:01:57.311481+00:00",
   "entries": [
     {
+      "url": "http://www.gfex.com.cn/u/interfacesWebTiDayQuotes/loadList?trade_date=20261002&trade_type=0&variety=lc",
+      "path": "prices/lithium-2026-10-02.json",
+      "sha256": "cfc735eb40f147189224395dec1a1f8400bce99056ae3b0bbf350e6b697162ea",
+      "fetched_at": "2026-10-08T17:35:22.078827+00:00",
+      "content_type": "application/json;charset=UTF-8",
+      "status": 200,
+      "bytes": 432
+    },
+    {
+      "url": "http://www.gfex.com.cn/u/interfacesWebTiDayQuotes/loadList?trade_date=20261005&trade_type=0&variety=lc",
+      "path": "prices/lithium-2026-10-05.json",
+      "sha256": "07e5622b721422b4e714d141abf6c73e7c76d933c0c750b560e5960c6596d001",
+      "fetched_at": "2026-10-08T17:35:24.158469+00:00",
+      "content_type": "application/json;charset=UTF-8",
+      "status": 200,
+      "bytes": 432
+    },
+    {
+      "url": "http://www.gfex.com.cn/u/interfacesWebTiDayQuotes/loadList?trade_date=20261006&trade_type=0&variety=lc",
+      "path": "prices/lithium-2026-10-06.json",
+      "sha256": "ec42159e3098b9e070f8df6e6e1edf4175fd86f13bc186968f32a0ef21167eaf",
+      "fetched_at": "2026-10-08T17:35:26.263808+00:00",
+      "content_type": "application/json;charset=UTF-8",
+      "status": 200,
+      "bytes": 432
+    },
+    {
+      "url": "http://www.gfex.com.cn/u/interfacesWebTiDayQuotes/loadList?trade_date=20261007&trade_type=0&variety=lc",
+      "path": "prices/lithium-2026-10-07.json",
+      "sha256": "1249b164eecdeedf94537c9477fe20d78492b1900f3e11e7b6213e3da34daafa",
+      "fetched_at": "2026-10-08T17:35:28.395025+00:00",
+      "content_type": "application/json;charset=UTF-8",
+      "status": 200,
+      "bytes": 432
+    },
+    {
+      "url": "http://www.gfex.com.cn/u/interfacesWebTiDayQuotes/loadList?trade_date=20261008&trade_type=0&variety=lc",
+      "path": "prices/lithium-2026-10-08.json",
+      "sha256": "005e6d2bf4961c610d87daea38eb55407ef0b3df2cf72d388e2440e562939718",
+      "fetched_at": "2026-10-08T17:35:30.474080+00:00",
+      "content_type": "application/json;charset=UTF-8",
+      "status": 200,
+      "bytes": 4836
+    },
+    {
+      "url": "http://www.gfex.com.cn/u/interfacesWebTiDayQuotes/loadList?trade_date=20261009&trade_type=0&variety=lc",
+      "path": "prices/lithium-2026-10-09.json",
+      "sha256": "ea4a1f24699874f030bc43304111fd0caa9a8050b5949510f2936445317932dc",
+      "fetched_at": "2026-10-08T17:35:32.557493+00:00",
+      "content_type": "application/json;charset=UTF-8",
+      "status": 200,
+      "bytes": 432
+    },
+    {
+      "url": "https://httpbin.org/status/503",
+      "path": "faults/upstream-503.html",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "fetched_at": "2026-10-08T17:35:41.999446+00:00",
+      "content_type": "text/html; charset=utf-8",
+      "status": 503,
+      "bytes": 0
+    },
+    {
+      "url": "https://stock2.finance.sina.com.cn/futures/api/jsonp.php/var%20_I0=/InnerFuturesNewService.getDailyKLine?symbol=I0",
+      "path": "prices/iron_ore-I0-kline.json",
+      "sha256": "cd7a2d90ada94fde8bb269fd856a5aacda7e762f0a4eef695e7b8538bfede4fe",
+      "fetched_at": "2026-10-08T17:35:34.814242+00:00",
+      "content_type": "application/javascript; charset=gbk",
+      "status": 200,
+      "bytes": 364880
+    },
+    {
+      "url": "https://stock2.finance.sina.com.cn/futures/api/jsonp.php/var%20_lc0=/InnerFuturesNewService.getDailyKLine?symbol=lc0",
+      "path": "prices/lithium-lc0-kline.json",
+      "sha256": "fb00aa785415e564612c8bc009524eff78f60d07a9a0a5e0b369602ba6a281ed",
+      "fetched_at": "2026-10-08T17:37:16.994003+00:00",
+      "content_type": "application/javascript; charset=gbk",
+      "status": 200,
+      "bytes": 98961
+    },
+    {
       "url": "https://www.australianmining.com.au/best-of-the-best-tunkillias-golden-finale-for-barton-gold/",
       "path": "articles/best-of-the-best-tunkillias-golden-finale-for-barton-gold.html",
       "sha256": "ff5ffbc9ef592a19c7ccb6e1b2824392b6f0017020921990a2eea75b9fa3c52f",

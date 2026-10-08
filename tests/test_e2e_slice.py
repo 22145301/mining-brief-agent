@@ -22,6 +22,7 @@ from mining_brief.config.sources import NEWS_SOURCES
 from mining_brief.contracts import BriefResult, FetchStatus, SectionKey
 from mining_brief.datasources.fixtures import FixtureStore
 from mining_brief.datasources.news import parse_feed
+from mining_brief.datasources.prices import trading_date
 
 ALL_SECTIONS = [
     SectionKey.MINING_RIGHTS,
@@ -59,10 +60,15 @@ async def test_canonical_request_produces_all_six_sections(
     ]
 
 
-async def test_news_section_has_content_and_prices_and_reserves_say_why_they_are_empty(
+async def test_news_and_prices_have_content_while_reserves_says_why_it_is_empty(
     settings: Settings, fixture_root: Path, canonical_request: str
 ) -> None:
-    """工单 01 的核心断言：**源缺失时简报照样出**，而且缺得明明白白。"""
+    """工单 01 的核心断言：**源缺失时简报照样出**，而且缺得明明白白。
+
+    工单 03 之后价格一节从"必缺"变成了"有数"，所以这条同时承担起一个新的任务：
+    证明**接通与未接通在同一次装配里各就各位** —— 价格有事实、储量有理由，
+    两者不能互相污染（把小票的降级文案漏进大票，或反过来）。
+    """
     result = await _run(settings, fixture_root, canonical_request)
     by_key = {section.key: section for section in result.sections}
 
@@ -70,13 +76,22 @@ async def test_news_section_has_content_and_prices_and_reserves_say_why_they_are
     assert news.facts, "新闻摘要必须有真内容 —— 否则这一刀没证明引用链路是通的"
     assert all(fact.citation is not None for fact in news.facts)
 
+    prices = by_key[SectionKey.PRICES]
+    assert len(prices.facts) == 1, "本次范围内只有锂一个品种（见 config/archive.py）"
+    assert "锂" in prices.facts[0].text
+    assert "117300.0" in prices.facts[0].text
+    assert "GFEX" in prices.facts[0].text
+    assert prices.facts[0].citation is not None, "价格也要能回溯到来源"
+    # 有内容就不该再挂一句降级说明 —— 空有事实的"数据缺失"是自相矛盾。
+    assert prices.note is None
+    # **截止时间必须是最后一个交易日，不是"今天"**：锚点在北京时间已是 10-09，
+    # 而 10-09 的行情当天尚未发布。把 10-09 写成价格时点就是编了一个还没发生的价。
+    assert prices.as_of == "2026-10-08"
+    assert prices.as_of != trading_date(FixtureStore(fixture_root).anchor_at).isoformat()
+
     resources = by_key[SectionKey.RESOURCES]
     assert resources.facts == ()
     assert "数据缺失" in (resources.note or "")
-
-    prices = by_key[SectionKey.PRICES]
-    assert prices.facts == ()
-    assert "数据缺失" in (prices.note or "")
 
     risks = by_key[SectionKey.RISKS]
     assert risks.facts == ()
@@ -84,9 +99,12 @@ async def test_news_section_has_content_and_prices_and_reserves_say_why_they_are
 
     # 第 6 节存在的意义就是"说清缺了什么、为什么缺"，不是一句免责声明。
     integrity = " ".join(fact.text for fact in by_key[SectionKey.INTEGRITY].facts)
-    assert "数据缺失" in integrity
-    assert "直链未核实到" in integrity  # 储量为什么缺
-    assert "尚未接入" in integrity  # 价格为什么缺
+    assert "数据缺失" in integrity  # 储量为什么缺
+    assert "直链未核实到" in integrity
+    assert "已取到" in integrity  # 价格取到了几个点
+    # 价格已经接通，就不能再在任何地方说它"尚未接入" —— 一句过期的免责声明
+    # 比没有更糟：它会让人以为去看别处也拿不到数。
+    assert "尚未接入" not in integrity
 
 
 async def test_each_section_states_its_own_data_cutoff(
@@ -348,13 +366,30 @@ async def test_transient_toolkit_failure_is_retried_before_degrading(
     assert "失效" not in (by_key[SectionKey.NEWS].note or "")
 
 
-async def test_envelope_statuses_are_honest_about_which_source_failed(
+async def test_a_source_that_cannot_deliver_names_itself_and_its_reason(
     settings: Settings, fixture_root: Path, canonical_request: str
 ) -> None:
-    """降价信封的 `source_status` 必须是 UNAVAILABLE，且带得出 reason。"""
+    """一个"取不到"的源要说清是**哪一个**、**为什么**，而不是一句干巴巴的"数据缺失"。
+
+    工单 03 之后价格已经接通，所以这里拿储量（技术报告直链未核实到）当样本 ——
+    它是锚定时刻唯一还取不到的源。
+
+    这个理由必须**同时**出现在它自己那一节和第六节里，而且是同一句话：只在一处
+    出现，读者就得在两节之间来回翻，翻不到就会怀疑是漏了还是坏了。
+    """
     result = await _run(settings, fixture_root, canonical_request)
     by_key = {section.key: section for section in result.sections}
 
-    assert by_key[SectionKey.NEWS].facts  # 新闻是好的
-    assert "尚未接入" in (by_key[SectionKey.PRICES].note or "")
+    assert by_key[SectionKey.NEWS].facts, "新闻是好的 —— 否则下面缺的就不止一处，断言会失焦"
+
+    note = by_key[SectionKey.RESOURCES].note or ""
+    assert note.startswith("数据缺失"), "缺就是缺，开头不许含糊"
+    # 理由按分隔符切出来，不做字符集 strip —— 那会把理由里本来就有的标点一起啃掉。
+    reason = note.split("——", 1)[-1].strip()
+    assert len(reason) > 8, "光说'数据缺失'等于没说：读者无法据此去查任何一个地方"
+    assert "直链" in reason, "理由要指到具体那一步（这里：技术报告的直链没核实到）"
+
+    integrity = " ".join(fact.text for fact in by_key[SectionKey.INTEGRITY].facts)
+    assert reason in integrity, "同一个理由要在第六节里原样再出现一次，不能让读者去猜"
+
     assert FetchStatus.UNAVAILABLE.value == "unavailable"

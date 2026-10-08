@@ -14,6 +14,10 @@ dependencies = [
     "structlog==25.4.0",
     "typer==0.19.2",
     "openai==2.2.0",
+    # Windows / macOS 上没有 IANA 时区库，`zoneinfo.ZoneInfo("Asia/Shanghai")` 会抛
+    # ZoneInfoNotFoundError。价格模块要用北京时间判交易日（见 prices.py），所以这个
+    # 依赖是**功能性的**，不是可选的 —— 少了它，陌生人 clone 下来第一次查价就崩。
+    "tzdata==2025.2",
 ]
 
 [project.optional-dependencies]

@@ -1,7 +1,11 @@
 """`lme-price-mcp` —— 题面点名的三个 server 之一（server 名照题面，不自创）。
 
-**薄壳**（ADR-0008）：参数校验 → adapter → 信封。品种路由（锂 → GFEX 碳酸锂、
-铜 → LME、铁矿石 → DCE）写在 adapter 里，不在这里。
+**薄壳**（ADR-0008）：参数校验 → adapter → 信封。品种路由写在 adapter 里，不在这里 ——
+而且路由本身也不在代码里，它读的是 `config/sources.py` 的 `PRICE_SOURCES` 登记表。
+
+当前登记的三个品种：锂 → GFEX 官方日行情、铁矿石 → 新浪财经转载的 DCE 合约、
+铜 → LME（需无头浏览器，工单 04，尚未接入）。铁矿石为什么不是 DCE 官方接口，
+见 `config/sources.py` 里的实测记录。
 """
 
 from __future__ import annotations
@@ -33,13 +37,19 @@ async def get_price(commodity: str, date: str) -> PriceLookup:
 
     **何时用**：需要"某一天的铜价/锂价/铁矿石价"时。
 
-    **参数**：`commodity` 取 `lithium` / `copper` / `iron_ore`（各自会自动路由到
-    GFEX 碳酸锂 / LME / DCE）；`date` 是 ISO 日期字符串，如 `2026-10-08`。
+    **参数**：`commodity` 取 `lithium` / `copper` / `iron_ore` —— 各自按登记表路由到
+    GFEX 官方日行情 / LME（尚未接入）/ 新浪财经转载的 DCE 合约；`date` 是 ISO 日期
+    字符串，如 `2026-10-08`。
 
     **返回**：`PriceLookup` 信封。`point.as_of` 是数据实际对应日，`point.requested_date`
     是你传的日期 —— **两者不等即表示本次回退到了更早的日期**（跳过非交易日或尚未
     披露的日子）。`point.delayed` 是另一件事：它表示**数据源固有**的延迟披露
-    （LME 恒为 true），不是回退标志。确实查不到时 `point` 为 `None`，**不会给 0 或近似值**。
+    （LME 恒为 true），不是回退标志。
+
+    三种"没有数"要分得开：**未找到**（源是好的，搜索范围内确实没有 → `status="ok"`、
+    `source_status=EMPTY`、`point=None`）、**取不到**（源拒绝服务/限流 → `status="degraded"`、
+    `source_status=UNAVAILABLE`、`reason` 里带状态码）、**录播缺失**（→ 抛 `ReplayMiss`，
+    不降级）。任何情况下都**不会给 0 或近似值**。
     """
     runtime = _runtime()
     return await runtime.prices().get_price(
