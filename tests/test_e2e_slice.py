@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import Mapping
 from dataclasses import replace
 from pathlib import Path
@@ -16,13 +17,21 @@ import pytest
 
 from mining_brief.agent import nodes
 from mining_brief.agent.llm import LLMClient, LLMError, build_llm_client
+from mining_brief.agent.narratives import lead_is_grounded, narrative_payload
 from mining_brief.agent.pipeline import run_brief
 from mining_brief.agent.toolkit import default_toolkit
 from mining_brief.config.archive import ARCHIVE
 from mining_brief.config.reports import PILBARA_CET
 from mining_brief.config.settings import Settings
 from mining_brief.config.sources import NEWS_SOURCES
-from mining_brief.contracts import BriefResult, FetchStatus, NewsCategory, NewsItem, SectionKey
+from mining_brief.contracts import (
+    SECTION_TITLES,
+    BriefResult,
+    FetchStatus,
+    NewsCategory,
+    NewsItem,
+    SectionKey,
+)
 from mining_brief.datasources.fixtures import FixtureStore
 from mining_brief.datasources.news import parse_feed
 from mining_brief.datasources.prices import trading_date
@@ -666,3 +675,151 @@ async def test_a_source_that_cannot_deliver_names_itself_and_its_reason(
     assert reason in integrity, "同一个理由要在第六节里原样再出现一次，不能让读者去猜"
 
     assert FetchStatus.UNAVAILABLE.value == "unavailable"
+
+
+# ---------------------------------------------------------------------------
+# 导读：每节一句，且模型在这条链上没有生成事实的机会（工单 08）
+# ---------------------------------------------------------------------------
+
+
+async def test_every_section_carries_a_lead(
+    settings: Settings, fixture_root: Path, canonical_request: str
+) -> None:
+    """六节各有一句导读，且落在**产物里** —— 不是只在内存的 state 上。
+
+    这条同时是"忘了重录"的看门人（见 `nodes.narrate` 的第 2 条注释）：`LLMReplayMiss`
+    刻意不被捕获，所以缺录播会在跑图时炸；而万一哪天有人把它改成降级，这条断言会
+    立刻变红 —— 一份导读**全线消失**的日报不该看起来像一次正常执行。
+    """
+    result = await _run(settings, fixture_root, canonical_request)
+
+    missing = [section.title for section in result.sections if not section.lead]
+    assert not missing, f"这些节没有导读：{missing}"
+
+    text = Path(result.output_path).read_text("utf-8")
+    for section in result.sections:
+        assert section.lead is not None
+        assert f"> {section.lead}" in text, f"{section.title} 的导读没进产物"
+
+
+async def test_a_lead_says_nothing_the_section_does_not_already_say(
+    settings: Settings, fixture_root: Path, canonical_request: str
+) -> None:
+    """导读里的每个数字、每个拉丁词都能在该节数据里找到 —— 逐字，不做推断。
+
+    这是"模型不参与事实生成"的可断言面。导读是**措辞**：它可以概括、可以排序，
+    但不能引入任何一个该节没有的数字或外部名称。
+    """
+    result = await _run(settings, fixture_root, canonical_request)
+
+    checked = 0
+    for section in result.sections:
+        assert section.lead is not None
+        payload = narrative_payload(section)
+        assert lead_is_grounded(section.lead, payload), (
+            f"{section.title} 的导读里出现了该节数据以外的东西：{section.lead}"
+        )
+        checked += 1
+    assert checked == len(ALL_SECTIONS), "六节都要被检查到，否则这条断言是空转的"
+
+
+class _NarrateDeafLLM:
+    """除了 `narrate` 一律照常转发给真回放客户端。
+
+    与 `_IntentDeafLLM` 同一个道理：被模拟的诱因（模型这次没答上来）本来就发生在
+    运行时，真实世界里由网络超时或服务端 5xx 触发。这里只是把触发条件换成一个显式
+    的桩子，**录播文件不动** —— 所以"回放缺录播会炸"那条纪律没有被绕过。
+    """
+
+    def __init__(self, inner: LLMClient) -> None:
+        self._inner = inner
+        self.nodes: list[str] = []
+
+    async def complete(
+        self, *, node: str, key_input: Mapping[str, Any], system: str, user: str
+    ) -> str:
+        self.nodes.append(node)
+        if node == "narrate":
+            raise LLMError("模拟：模型服务这次没答上来")
+        return await self._inner.complete(node=node, key_input=key_input, system=system, user=user)
+
+
+async def test_a_dead_narrator_costs_the_leads_and_nothing_else(
+    settings: Settings, fixture_root: Path, llm_fixture_root: Path, canonical_request: str
+) -> None:
+    """模型挂了 → **只**损失导读，六节与引用全都在，第六节记一笔。
+
+    这条是导读这个节点唯一允许的失败姿态。反过来做（没导读就不出报、或悄悄留空）
+    都会让一次模型抖动升级成"今天没有日报"或"今天没有内容"。
+    """
+    deaf = _NarrateDeafLLM(build_llm_client(settings, fixture_root=llm_fixture_root))
+
+    result = await _run(settings, fixture_root, canonical_request, llm=deaf)
+
+    assert deaf.nodes.count("narrate") == len(ALL_SECTIONS), (
+        "每一节都该试过一次 —— 一次失败不该连累其余五节"
+    )
+    assert result.refusal is None
+    assert [section.key for section in result.sections] == ALL_SECTIONS, "六节一个都不能少"
+    assert all(section.lead is None for section in result.sections), "导读应当整体欠奉"
+
+    # 内容一字未变。逐节点名而不是 `all(section.facts)`：风险那节**本来就**可以是空的
+    # （本次未触发任何规则），把它算成"内容丢了"是把一条正常的产物当成故障。
+    by_key = {section.key: section for section in result.sections}
+    for key in (SectionKey.NEWS, SectionKey.RESOURCES, SectionKey.PRICES, SectionKey.INTEGRITY):
+        assert by_key[key].facts, f"{key} 的内容被导读的失败连带丢掉了"
+    assert "本次未触发任何风险信号" in (by_key[SectionKey.RISKS].note or "")
+
+    integrity = next(s for s in result.sections if s.key is SectionKey.INTEGRITY)
+    marked = [fact.text for fact in integrity.facts if "没有导读" in fact.text]
+    assert marked, "第 6 节没有记下这笔 —— 导读全线消失被伪装成了「本节就这么空」"
+    # 三种失败姿态在产物里的措辞各不相同（调用失败 / 没给出可用的导读 / 越界），
+    # 所以读者不必看日志也能知道是"模型没答上来"还是"模型编了东西"。
+    assert "模型调用失败" in marked[0], f"记一笔要说清是哪一类失败：{marked[0]}"
+
+    text = Path(result.output_path).read_text("utf-8")
+    assert "没有导读" in text, "这件事必须出现在**产物**里，而不只在内存里"
+    assert "本次未触发任何风险信号" in text, "其余各节照常，包括风险那节"
+
+
+class _FabricatingLLM:
+    """只在一节上编数字，其余照常转给回放客户端。
+
+    用来钉住"接地校验读到越界时**只**丢那一节"：如果实现把它当成整条链的失败，
+    另外五节的导读会被连带丢掉 —— 而那种写法在只看"有没有导读"的用例下看不出来。
+    """
+
+    def __init__(self, inner: LLMClient, *, title: str, invented: str) -> None:
+        self._inner = inner
+        self._title = title
+        self._invented = invented
+
+    async def complete(
+        self, *, node: str, key_input: Mapping[str, Any], system: str, user: str
+    ) -> str:
+        if node == "narrate" and key_input.get("title") == self._title:
+            return json.dumps({"lead": self._invented}, ensure_ascii=False)
+        return await self._inner.complete(node=node, key_input=key_input, system=system, user=user)
+
+
+async def test_an_invented_number_costs_only_that_one_section_its_lead(
+    settings: Settings, fixture_root: Path, llm_fixture_root: Path, canonical_request: str
+) -> None:
+    """模型在一节里编了个该节没有的数字 → 那一节没有导读，其余五节照留。"""
+    fabricating = _FabricatingLLM(
+        build_llm_client(settings, fixture_root=llm_fixture_root),
+        title=SECTION_TITLES[SectionKey.PRICES],
+        invented="锂价收于 999999 元/吨。",
+    )
+
+    result = await _run(settings, fixture_root, canonical_request, llm=fabricating)
+
+    by_key = {section.key: section for section in result.sections}
+    assert by_key[SectionKey.PRICES].lead is None, "编了数字的那一节不该留下导读"
+    for key in (SectionKey.NEWS, SectionKey.RESOURCES, SectionKey.RISKS, SectionKey.INTEGRITY):
+        assert by_key[key].lead, f"{key} 被别节的越界连带丢掉了导读"
+
+    integrity = by_key[SectionKey.INTEGRITY]
+    marked = [fact.text for fact in integrity.facts if "没有导读" in fact.text]
+    assert marked and SECTION_TITLES[SectionKey.PRICES] in marked[0]
+    assert "越界" not in marked[0] and "以外的东西" in marked[0], marked[0]

@@ -1,0 +1,30 @@
+{
+  "node": "narrate",
+  "responses": {
+    "narrate:058d356ed32d6786": "{\"lead\": \"本节覆盖 8 个项目、7 天窗口：新闻与 Pilgangoora 储量已取到，其余 7 个项目储量数据缺失，铜、铁矿石、锂价格各取到 1 个数据点。\"}",
+    "narrate:1891ea5a568629f7": "{\"lead\": \"本节价格走势数据缺失，锂的价格工具链路失效。\"}",
+    "narrate:199fa7db441d68d6": "{\"lead\": \"本节为截至2022-06-30的JORC资源量数据，含Measured、Indicated、Inferred三项，请注意资源量并非储量。\"}",
+    "narrate:2dac6106e88af9e9": "{\"lead\": \"本节储量数据缺失，PDF 工具链路失效：RuntimeError。\"}",
+    "narrate:3b267d333732beda": "{\"lead\": \"本节矿权动态数据缺失，新闻工具链路失效。\"}",
+    "narrate:44144c7517862c3d": "{\"lead\": \"本期新闻摘要含锂矿、金矿及全球前50矿企相关报道。\"}",
+    "narrate:4cab37d2aa6c505e": "{\"lead\": \"矿权动态：MACH Energy 就法院裁决承诺负责任运营。\"}",
+    "narrate:4d3ab0a2323b9f6c": "{\"lead\": \"本期新闻摘要含 Pilgangoora 与 PEA 两条，检索式见注。\"}",
+    "narrate:5e2eca1e200a9011": "{\"lead\": \"截至2026-10-08，Pilgangoora覆盖7天窗口，新闻与储量已取到，锂价格数据缺失。\"}",
+    "narrate:70bff2b97ce71139": "{\"lead\": \"风险提示：本次未触发任何风险信号。\"}",
+    "narrate:7dfa6179fea1c5a0": "{\"lead\": \"本期新闻摘要共18条，涵盖锂、铜、锡、石墨等矿种及多家矿业公司动态。\"}",
+    "narrate:8f9cc89a17bee808": "{\"lead\": \"价格走势：2026-10-08，GFEX lc2701 锂 117300.0 元/吨。\"}",
+    "narrate:a12652859aebfba9": "{\"lead\": \"本节矿权动态暂无数据，窗口内没有符合范围的矿权动态。\"}",
+    "narrate:abf1bf16a43df304": "{\"lead\": \"截至2026-10-07，本节含1条新闻：Pilbara project suspended pending permit review（MINING.COM）。\"}",
+    "narrate:af7a61c9f4043a73": "{\"lead\": \"截至2026-10-08，Pilgangoora覆盖7天窗口，新闻、储量与1个锂价格数据点均已取到。\"}",
+    "narrate:b007a94985b664e6": "{\"lead\": \"本节仅一条风险提示：未分类的数量或品位不得单独披露，另附 MINING.COM 2026-10-08 报道。\"}",
+    "narrate:b1922073b3e83a70": "{\"lead\": \"Pilgangoora 储量数据缺失，新闻与锂价格已取到。\"}",
+    "narrate:baecbb8594d26866": "{\"lead\": \"截至2022-06-30，本节仅列Pilgangoora的Measured、Indicated、Inferred资源量，另有7座未取到储量数据。\"}",
+    "narrate:c45ac78ae7529a79": "{\"lead\": \"截至2026-10-08，本节含铜、铁矿石、锂三项价格。\"}",
+    "narrate:cca787b0bf17b784": "{\"lead\": \"储量数据缺失：技术报告返回 HTTP 503，本次未能取到。\"}",
+    "narrate:d3aa48f8007e98bc": "{\"lead\": \"截至2026-10-08，Pilgangoora储量与锂价格已取到，新闻数据缺失。\"}",
+    "narrate:e66309af008ddc16": "{\"lead\": \"本节数据缺失：新闻工具链路失效，RuntimeError。\"}",
+    "narrate:e9b014683f566a22": "{\"lead\": \"截至2026-10-08，Pilgangoora储量数据缺失，新闻与锂价格已取到。\"}",
+    "narrate:f488dee9f2f2b514": "{\"lead\": \"本次未触发任何风险信号，另有 1 条提示未达到逐字引权威原文的门槛。\"}",
+    "narrate:f5b6f4372e4b2261": "{\"lead\": \"本节含 R3、R4 两条风险提示，涉及初步经济评估与产量目标的法定措辞。\"}"
+  }
+}

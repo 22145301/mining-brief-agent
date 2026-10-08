@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -62,13 +63,18 @@ async def test_a_replay_miss_kills_the_whole_run_instead_of_producing_a_degraded
 ) -> None:
     """端到端的后果：宁可不产出，也不产出一份假的。
 
-    注意这里 `settings.llm_mode` 是 replay 而录播里没有这句话 —— 这正是"有人改了
-    prompt 或加了个新用例却忘了重录"的样子。**不许**出现一份写着"数据缺失"的日报。
+    这句话在录播里没有 —— 这正是"有人改了 prompt 或加了个新用例却忘了重录"的样子。
+    **不许**出现一份写着"数据缺失"的日报。
+
+    回放模式在这里**明写**而不是听 `settings` 夹具的默认值：夹具在 `--record-llm`
+    下落到 live，这条用例就会真的去调一次模型，把"从来没录过"的那句话录进
+    `fixtures/llm/` —— 下一次回放它就不再缺录播了，这条用例从此永远绿。一个
+    靠"恰好还没录"才成立的用例，必须自己保证那个"还没"。
     """
     with pytest.raises(LLMReplayMiss):
         await run_brief(
             "这句话从来没有被录过，所以解析不出意图",
-            settings=settings,
+            settings=replace(settings, llm_mode="replay", llm_api_key=""),
             fixture_root=fixture_root,
         )
 
@@ -79,8 +85,6 @@ async def test_replay_never_touches_the_network_even_when_configured_to(
     """把一个必然连不上的 base_url 配上，跑完整条链路仍然全绿 ——
     这就是"默认路径不碰网络"的可执行证据，而不是一句声明。
     """
-    from dataclasses import replace
-
     hostile = replace(settings, llm_base_url="http://127.0.0.1:1", http_proxy="http://127.0.0.1:1")
 
     result = await run_brief(canonical_request, settings=hostile, fixture_root=fixture_root)

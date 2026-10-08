@@ -11,9 +11,15 @@ from mining_brief.config.settings import ConfigError, Settings
 
 
 def test_settings_default_to_replay_on_both_switches(monkeypatch: pytest.MonkeyPatch) -> None:
-    """零配置冷启动必须是回放、且不需要任何密钥（PRD §10、工单 10 的验收前提）。"""
+    """零配置冷启动必须是回放、且不需要任何密钥（PRD §10、工单 10 的验收前提）。
+
+    key 也要删：`--record-llm` 那一轮会把它导出到 shell 里，而"零配置"说的**就是**
+    shell 里什么都没有的那种情形 —— 让这条断言跟着当前 shell 变红变绿，它测的就不是
+    代码的默认值了。
+    """
     monkeypatch.delenv("MINING_DATA_MODE", raising=False)
     monkeypatch.delenv("MINING_LLM_MODE", raising=False)
+    monkeypatch.delenv("MINING_LLM_API_KEY", raising=False)
 
     settings = Settings.from_env()
 

@@ -85,7 +85,9 @@ class ReplayLLMClient:
         if not path.exists():
             raise LLMReplayMiss(
                 f"没有 {node} 的录播文件：{path}\n"
-                "缺录播时**不回退真实调用** —— 请跑 scripts/record_llm.py 重录。"
+                "缺录播时**不回退真实调用**。重录有两条路，各管一段："
+                "scripts/record_llm.py 管产品路径的内置样例句；"
+                "pytest --record-llm 管测试套件碰到的每一段输入。"
             )
         payload = json.loads(path.read_text("utf-8"))
         return {str(key): str(value) for key, value in payload["responses"].items()}
@@ -106,8 +108,8 @@ class ReplayLLMClient:
             raise LLMReplayMiss(
                 f"{node} 的这个输入没有录播：{key}\n"
                 f"该节点已有录播：{known}\n"
-                "输入数据变了（或新增了用例）就需要重录：跑 scripts/record_llm.py。"
-                "这是刻意的失败而非遗漏 —— 回放不许回退真实调用。"
+                "输入数据变了（或新增了用例）就要重录：scripts/record_llm.py 管内置样例句，"
+                "pytest --record-llm 管测试套件。这是刻意的失败而非遗漏 —— 回放不回退真实调用。"
             )
         return table[key]
 
@@ -198,6 +200,23 @@ class LLMRecorder:
         return {str(key): str(value) for key, value in payload["responses"].items()}
 
 
+#: 进程级的"记录器兜底"。**只给重录用**（`pytest --record-llm`）。
+#:
+#: 为什么需要它：重录要覆盖的是"测试套件关心的每一段输入"，而那些输入散在几十条
+#: 用例里（有的还塞了自己造的新闻），从 `scripts/record_llm.py` 里复现不出来。
+#: 让测试**自己**在 live 模式下跑一遍、把它们碰到的每个输入都录下来，录出来的集合
+#: 才恰好等于回放需要的集合 —— 少一条，回放就会以 `LLMReplayMiss` 当场指出来。
+#:
+#: 它默认是 `None`，生产路径永远走不到。
+_default_recorder: LLMRecorder | None = None
+
+
+def set_default_recorder(recorder: LLMRecorder | None) -> None:
+    """设置进程级兜底记录器。返回 `None` 即清空。"""
+    global _default_recorder
+    _default_recorder = recorder
+
+
 def build_llm_client(
     settings: Settings,
     *,
@@ -210,5 +229,5 @@ def build_llm_client(
         api_key=settings.llm_api_key,
         base_url=settings.llm_base_url,
         model=settings.llm_model,
-        recorder=recorder,
+        recorder=recorder or _default_recorder,
     )

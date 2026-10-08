@@ -19,7 +19,16 @@ from typing import Any
 
 from mining_brief.agent.citations import CitationLedger, verify
 from mining_brief.agent.llm import LLMError
+from mining_brief.agent.narratives import (
+    NARRATE_NODE,
+    extract_lead,
+    lead_is_grounded,
+    narrative_payload,
+    render_payload,
+)
 from mining_brief.agent.prompts import (
+    NARRATE_SYSTEM,
+    NARRATE_USER,
     PARSE_INTENT_SYSTEM,
     PARSE_INTENT_USER,
     RESOLVE_ENTITIES_SYSTEM,
@@ -848,13 +857,90 @@ def assemble(state: BriefState) -> dict[str, Any]:
 
 
 async def narrate(state: BriefState) -> dict[str, Any]:
-    """每节一句导读。
+    """每节一句导读：输入是**已冻结的该节数据**，输出只能写措辞、不能写事实。
 
-    **08 号工单**把它接上模型：输入是已冻结的该节数据，输出只能写措辞、不能写事实。
-    本票是空操作 —— 图脊先立起来，措辞后面补；顺序反过来会返工两次。
+    这是图上最后一个模型节点，也是唯一一个**失败不影响产物完整性**的：它降级为
+    "这一节没有导读"，日报照常出，第六节记一笔。
+
+    三处刻意的选择：
+
+    1. **逐节一次调用**，不是六节一句话。回放的 key 落在该节数据上（ADR-0009），
+       合成一次调用会让任何一节的改动作废全部六节的录播；而且逐节调用下某节失败
+       只丢那一节的导读。
+    2. **只捕获 `LLMError`。** `LLMReplayMiss` 刻意不继承它（见 `llm.py`）：
+       "模型这次没答上来"降级是对的，"我们忘了重录"降级是错的 —— 后者会让一份
+       导读全线消失的日报看起来像一次正常执行（ADR-0009）。所以缺录播照样炸到 CLI，
+       而 `test_every_section_carries_a_lead` 会在那一刻先红。
+    3. **校验不过就丢掉整句**，不修补。一句被我们改写过的导读，就不再是它写的那句了；
+       而"这是模型说的"与"这是我们润过的"之间的差别，正是导读与事实的分界线。
     """
-    del state
-    return {}
+    sections = state.get("sections") or ()
+    if not sections:
+        return {}
+
+    leads: dict[str, str] = {}
+    problems: list[str] = []
+
+    for section in sections:
+        payload = narrative_payload(section)
+        try:
+            raw = await state["llm"].complete(
+                node=NARRATE_NODE,
+                key_input=payload,
+                system=NARRATE_SYSTEM,
+                user=NARRATE_USER.format(title=section.title, payload=render_payload(payload)),
+            )
+        except LLMError as exc:
+            log.warning("narrate.degraded", section=str(section.key), error=str(exc))
+            problems.append(f"{section.title}（模型调用失败）")
+            continue
+
+        lead = extract_lead(raw)
+        if lead is None:
+            log.warning("narrate.unusable", section=str(section.key), raw=raw[:200])
+            problems.append(f"{section.title}（模型没给出可用的导读）")
+            continue
+        if not lead_is_grounded(lead, payload):
+            log.warning("narrate.ungrounded", section=str(section.key), lead=lead)
+            problems.append(f"{section.title}（导读里出现了该节数据以外的东西）")
+            continue
+
+        leads[str(section.key)] = lead
+
+    updated = tuple(
+        section.model_copy(update={"lead": leads[str(section.key)]})
+        if str(section.key) in leads
+        else section
+        for section in sections
+    )
+
+    if problems:
+        updated = _record_narration_gap(updated, problems)
+
+    return {"sections": updated, "narratives": leads}
+
+
+def _record_narration_gap(
+    sections: tuple[Section, ...], problems: list[str]
+) -> tuple[Section, ...]:
+    """把"哪几节没有导读"落成**数据完整性**节里的一条事实。
+
+    为什么非得是这一节、这一种写法：`assemble` 早就把六节搭好了，此刻再往
+    `state["notes"]` 里追加，**没有任何节点会再读它** —— 那笔记录会静默消失，
+    而"导读全线消失"于是长得和"一切正常"一模一样。核验者读第六节看的是事实列表，
+    记在脚注里读起来就像"本节本来也没什么可说的"。日志里有技术细节（`narrate.degraded`
+    带异常原文），这里只留读得懂的那半句。
+    """
+    fact = Fact(
+        text="以下各节没有导读（该节其余内容不受影响）：" + "；".join(problems) + "。",
+        citation=None,
+    )
+    return tuple(
+        section.model_copy(update={"facts": (*section.facts, fact)})
+        if section.key is SectionKey.INTEGRITY
+        else section
+        for section in sections
+    )
 
 
 # ---------------------------------------------------------------------------
