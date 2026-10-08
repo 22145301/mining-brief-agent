@@ -259,6 +259,7 @@ CI 结论取决于谁先跑。实测记录写在 `pyproject.toml` 的注释里�
 §3 逐矿预期表**三处**都暗示按体系分流。我采纳了分流（三处对一处；且给一座 NI 43-101 的矿引
 JORC Clause 12 是实打实引错法条），代价是 `ArchiveEntry.standard` 要重新加回来。
 **如果你的原意是"R5 不分流"，改回来只是删一个条件。** 我没动文档。
+**（补：天亮前那份独立的 JORC 条款核查支持"分流"这一侧 —— 见 §8.3。）**
 
 **3. 推 GitHub 并替换 badge 的占位。**
 `OWNER/REPO` 是全仓库**唯一**的占位（README 里注明）。CI 我**只在本地把四条命令都跑过**，
@@ -277,7 +278,9 @@ JORC Clause 12 是实打实引错法条），代价是 `ArchiveEntry.standard` �
 - Kamoa-Kakula 那份 36 MB NI 43-101 未登记 → 8 座矿里 7 座的储量是"数据缺失"。
 - `--network none` 只验了容器；Linux 主机上的本地运行没验过（只有 Windows）。
 - Cursor 侧的 `${workspaceFolder}` 替换没实机验过（只验了 Claude Code）。
-- 三个研究 agent（lithium / copper / ironore）我发过消息，**始终没有回复**；没有据此下过任何结论。
+- ~~三个研究 agent（lithium / copper / ironore）我发过消息，**始终没有回复**~~ ——
+  **这句在写完报告之后就不成立了**：它们在天亮前回信了。核实结果与我据此做了什么，
+  见文末 **[附录](#八附研究-agent-回信交付之后)**。当时确实没回复，报告如实写了当时的状态。
 - 本报告之外，我没有动 `PRD.md`、`spec.md`、`CONTEXT.md`、`docs/adr/` 里的任何一个字（`git log` 可查）。
 
 **不确定**
@@ -325,3 +328,88 @@ uv run pytest -q -m stdio
 uv run mining-brief brief "给我生成一份今日简报" --out briefs/wide   # 三品种价格那一节
 docker compose up && sha256sum briefs/brief-2026-10-08.md            # 0928bd75d0d1056e…
 ```
+
+---
+
+## 八、附：研究 agent 回信（交付之后）
+
+我在写报告时发出去的研究 agent，在天亮前陆续回信了（含一份很扎实的 JORC 条款核查）。
+**它们是同行会话，不是权威** —— 所以我没有直接采信，而是拿**手边同一份正本**自己重跑了一遍。
+结论先给：**没有一处需要改动已交付的东西；有若干条是对我已交付内容的独立佐证。**
+
+### 8.1 先证明"读的是同一份文件"
+
+agent 报的是 MD5，我 §1 记的是 sha256。两边都没有的可比项，先对齐字节：
+
+```
+$ wc -c .scratch/jorc-src/jorc2012.pdf          → 1548341
+$ md5sum    .scratch/jorc-src/jorc2012.pdf      → d475e3a58110bb8a6a25fd785468b27c
+$ sha256sum .scratch/jorc-src/jorc2012.pdf      → 48b4a257b4f997f1b9db1b493d5a7f7b2f08decd547b85e03761a6618b1187d6
+```
+
+**三方吻合**：agent 的 MD5 与我本地一致，我的 sha256 与 `docs/risk-rules.md` §1 表里记的**逐位一致**。
+所以下面的复核是在**同一串字节**上做的。
+
+### 8.2 我逐条自查的结果（不是转述）
+
+| agent 的说法 | 我自己在同一份正本上的复核 | 结论 |
+|---|---|---|
+| JORC 2012 正本里 `production target` **0 命中** | `grep -c -i "production target" jorc2012.txt` → **0**（连 `_raw` 抽本也是 0） | ✅ 证实 |
+| "生产目标警示句"属 **ASX LR Ch.5 / GN31**，不属 JORC | JORC Clause 3 指南第 142 行自己写着：`Code associated with Public Reports that are addressed specifically within the listing rules.` | ✅ 证实 |
+| `caution` 只出现在 Clause 21 指南 / Clause 34 指南 / Clause 38 | 命中恰为第 709、787、1032、1124、1127 五行 | ✅ 证实 |
+| JORC 是否存在"不得把 Inferred 转成储量"的条款 | Clause 21（第 675 行）：`must not be converted to an Ore Reserve` | ✅ 存在 |
+| 2012 版仍现行？（agent 说**它没核实**） | **我自己查了** `jorc.org/code-update/`：截至 **2026 年 8 月**最后一次更新，新版仍在评审，原文 `Once the Code is finalised … after an agreed transition period, operation of the new Code will commence.` —— **尚未生效** | ✅ 2012 版仍是现行版本 |
+| 2012 版生效日 | 正本第 10–11 行：`E ective 20 December 2012 and mandatory from 1 December 2013`（`E ective` 的连字伪影见 §1，原文为 `Effective`） | ✅ 证实 |
+
+### 8.3 这些回信**没有**改变什么 —— 因为我的规则集本来就是对的
+
+最该说明的一点：agent 那条"生产目标警示句不在 JORC"的结论，看着像是要改 R4，
+**其实它佐证了 R4**：
+
+- R4 的 `逐字原文` 引的是 **ASX Listing Rule 5.16.4**，**不是** JORC；
+- `docs/risk-rules.md` §1 也明写着「`5.16` 管的是 `production target`」。
+
+也就是说，我在冻结规则集时就已经把"生产目标"归到了 ASX 名下。**一个独立的第三方核查，
+读了同一份字节，得出了同一个归因** —— 这比我自己说"我核过了"更有说服力，可以放心经得起追问。
+
+同理，R5 引 JORC Clause 12 也是对的（第 429–430 行逐字在）。R5 的 `standard` 分流
+（JORC 规则不套 NI 矿）由此也站得更稳：Clause 12 是 JORC 自家的术语条款，套到一座
+NI 43-101 的矿上确实是**引错法条**。
+
+### 8.4 顺带查出来三处，我**一个字都没动**，留给你定
+
+1. **§7 的复验命令在 JORC 上会漏。** `grep -n "must only use the terms set out in Figure 1" jorc.txt`
+   在本机抽本上**返回空** —— 因为该句跨两行（第 429 行 `… must only use the`，第 430 行 `terms set out in Figure 1.`）。
+   引文本身是逐字的，**是那条复验命令不严谨**。§1 只警告了连字与空格伪影，没警告换行。
+   一行字的修法（把 grep 换成 `grep -A1 "must only use"` 或跨行匹配），我没动 ——
+   `risk-rules.md` 是工单 02 的冻结产出。
+2. **R1 的中文说明把 JORC 的对应物指成了 Clause 12。** agent 查到的 JORC Clause 26 更贴
+   （第 815 行 `Categories must not be reported in a combined form unless details for the individual…`、
+   第 822 行 `Mineral Resources must not be aggregated with Ore Reserves.`）—— 那才是"不得混列/相加"。
+   这是**说明文字**里的交叉引用不准，不涉及任何 `verbatim`，所以不影响产物正确性，
+   但评审人若较真会问到。同样没动。
+3. **档案扩展候选**：三个 agent 各给了十几座矿 + 已下载成功的 PDF 直链（锂 6 份、铜 5 份、铁矿石 6 份）。
+   看着很诱人，但**采纳会改动 `commodity_in_scope` → 产物哈希与已录播的 LLM 响应全部作废**，
+   不是我在你睡着时该单方面做的决定。清单原样留着等你。
+   而且它们**未经我逐条核实**，agent 自己就自查出若干问题：力拓 Simandou 与 Vale 那两份实际是
+   **S-K 1300** 而非 JORC（agent 填的 `standard` 列自己标了不准）、若干中文公司名是**音译非官方**、
+   Mary River 只有 **Wayback 快照**、Vizcachitas 的资源量表是**位图**抽不出文本。
+
+### 8.5 一个意外收获：对工单 06 的独立佐证
+
+铜那路 agent 自己去下载了 Kamoa-Kakula 的报告，报回来：
+
+```
+36,169,167 字节  sha256 前 12 位 29c81fcf304d
+```
+
+与工单 06 记下的**逐位相同**（`36 169 167 B` / `29c81fcf304d`）。**一个独立会话、另一次下载、
+同一个哈希** —— 这是"那次真下载过、不是编的"的一份外部证明。这条我没法自己给自己开，
+来了正好补上。
+
+### 8.6 我没做的
+
+- **没有回复这些 agent**，也没有据它们改动任何文档、规则或代码。
+- 候选矿山清单**逐条未核实**，只做转述（且已标注 agent 自查出的瑕疵）。
+- 上述 8.4 的三处全部**保持原状**，等你在早上定夺 —— 与 R5 那处冲突同一处理方式：
+  冲突进报告，不动冻结文档。
