@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 from typing import TypedDict
 
@@ -17,6 +18,7 @@ from mining_brief.agent.llm import LLMClient
 from mining_brief.agent.toolkit import ToolKit
 from mining_brief.config.settings import Settings
 from mining_brief.contracts import (
+    ArchiveEntryRef,
     BriefResult,
     Citation,
     CitationReport,
@@ -31,6 +33,20 @@ from mining_brief.contracts import (
     Slots,
     Uncovered,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class ResourceLookup:
+    """一座矿山的一次储量抽取：**问的是谁** + **答了什么**。
+
+    为什么要把两者绑在一起，而不是只存一个 `ResourceExtract` 元组：降级信封里
+    **没有矿山名** —— 契约上 `ResourceExtract` 描述的是"一次抽取的结果"，它不知道
+    自己是谁的。而一份覆盖多座矿山的日报必须说得出"**哪座矿**的直链没核实到"。
+    配对发生在调工具的那一刻，之后隔着一次 MCP 往返就再也推不回来了。
+    """
+
+    entry: ArchiveEntryRef
+    extract: ResourceExtract
 
 
 class BriefState(TypedDict, total=False):
@@ -54,7 +70,13 @@ class BriefState(TypedDict, total=False):
     # --- 4a / 4b / 4c：三个并行 fetch，各写各的 key -------------------------
     news: NewsSearchResult | None
     prices: dict[str, PriceSeries] | None
-    resources: ResourceExtract | None
+    resources: tuple[ResourceLookup, ...] | None
+    """**每座在范围内的矿山一条**，不是全场一条。
+
+    范围里可能有多座矿山（使用者没点名时就是全档案），而储量数据是按矿山分布的：
+    抽出一座矿的表就装作它是"本次范围内的储量"，等于替使用者在几座矿之间挑了一座，
+    剩下的静默消失 —— 那正是本项目最不该犯的错。取不到的矿山留在元组里如实记一笔。
+    """
 
     # --- 5 / 6 / 7 / 8 / 9 号节点 ------------------------------------------
     signals: tuple[RiskSignal, ...]

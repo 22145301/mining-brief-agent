@@ -26,14 +26,14 @@ from mining_brief.agent.prompts import (
     RESOLVE_ENTITIES_USER,
 )
 from mining_brief.agent.retry import retry_params, with_retry
-from mining_brief.agent.rules import RULES, evaluate
-from mining_brief.agent.state import BriefState
+from mining_brief.agent.rules import HINT_RULES, RULES, evaluate
+from mining_brief.agent.state import BriefState, ResourceLookup
 from mining_brief.config.archive import (
     ARCHIVE,
     ArchiveEntry,
     entries_for_commodity,
     known_commodities,
-    match_entry,
+    match_entries,
 )
 from mining_brief.config.logging import get_logger
 from mining_brief.contracts import (
@@ -164,18 +164,21 @@ def _candidates_block() -> str:
     )
 
 
-def _resolve_mine(spoken: str, proposed: str | None) -> ArchiveEntry | None:
+def _resolve_mine(spoken: str, proposed: str | None) -> tuple[ArchiveEntry, ...]:
     """模型给的候选**必须**过档案这一关。
 
     这是全系统唯一可能"编造实体"的入口，所以最终的落档判定不交给模型：模型说出的
     id 若不在档案里，一律当没说，退回档案自己的字符串匹配（验收 A9）。
+
+    返回**元组**：使用者说的若是公司名（"Mineral Resources"），该公司名下每一座矿
+    都在范围内 —— 取第一条就是把其余几座矿静默丢掉。
     """
     if proposed:
         exact = next((entry for entry in ARCHIVE if entry.id == proposed), None)
         if exact is not None:
-            return exact
+            return (exact,)
         log.warning("entity.proposal_rejected", proposed=proposed, spoken=spoken)
-    return match_entry(spoken)
+    return match_entries(spoken)
 
 
 async def resolve_entities(state: BriefState) -> dict[str, Any]:
@@ -202,11 +205,11 @@ async def resolve_entities(state: BriefState) -> dict[str, Any]:
             # "实体解析交给档案而不是模型"换来的免疫性。
             log.warning("entity.llm_degraded", error=str(exc))
 
-        entry = _resolve_mine(slots.mine, proposed)
-        if entry is None:
+        found = _resolve_mine(slots.mine, proposed)
+        if not found:
             uncovered.append(Uncovered(spoken=slots.mine, kind="mine"))
         else:
-            matched.append(entry)
+            matched.extend(found)
 
     if slots.commodity:
         by_commodity = entries_for_commodity(slots.commodity)
@@ -453,49 +456,66 @@ def _resources_entry(scope: ReportScope) -> ArchiveEntry | None:
     return next((entry for entry in ARCHIVE if entry.id == first.id), None)
 
 
-async def fetch_resources(state: BriefState) -> dict[str, Any]:
-    scope = state["scope"]
-    assert scope is not None
-    archive_entry = _resources_entry(scope)
-
-    if archive_entry is None or not archive_entry.report_url:
+async def _extract_one(state: BriefState, archive_entry: ArchiveEntry) -> ResourceExtract:
+    """抽**一座**矿山的储量表。返回的一定是信封 —— 失败在这里就地变成降级。"""
+    if not archive_entry.report_url:
         # 档案里没有技术报告直链 —— 这是**已知的数据缺口**，如实记，不编一个 URL 出来。
         # 显示名用档案条目的规范项目名（不是用户的口语说法），避免散文里出现两种叫法。
-        who = archive_entry.project if archive_entry else "本次范围"
-        return {
-            "resources": ResourceExtract(
-                status="degraded",
-                source_status=FetchStatus.UNAVAILABLE,
-                reason=f"{who} 的技术报告直链未核实到，本次无法抽取储量数据。",
-                retrieved_at=state["now"],
-                table=None,
-            )
-        }
+        # 能把 `report_gap`（为什么没有）一起说出来就说 —— "我们没查到"与"这家公司
+        # 根本不发这种文件"对读者的含义完全不同，只写"未核实到"是把这两件事糊成一件。
+        why = f"（{archive_entry.report_gap}）" if archive_entry.report_gap else ""
+        return ResourceExtract(
+            status="degraded",
+            source_status=FetchStatus.UNAVAILABLE,
+            reason=f"{archive_entry.project} 的技术报告直链未核实到{why}，本次无法抽取储量数据。",
+            retrieved_at=state["now"],
+            table=None,
+        )
 
-    attempts, base_delay = retry_params(state)
     report_url = archive_entry.report_url
+    attempts, base_delay = retry_params(state)
     try:
-        extract = await with_retry(
+        return await with_retry(
             lambda: state["toolkit"].extract_resources(report_url),
             attempts=attempts,
             base_delay_s=base_delay,
-            label="resources",
-            on_retry=_retry_logger("resources"),
+            label=f"resources:{archive_entry.id}",
+            on_retry=_retry_logger(f"resources:{archive_entry.id}"),
         )
     except LoudFailure:
+        # 我们的错（回放缺录播、没装 pypdf）—— 不许变成"数据缺失"。
         raise
     except Exception as exc:
-        log.warning("fetch.resources.failed", error=str(exc))
-        return {
-            "resources": ResourceExtract(
-                status="degraded",
-                source_status=FetchStatus.UNAVAILABLE,
-                reason=f"PDF 工具链路失效：{type(exc).__name__}",
-                retrieved_at=state["now"],
-                table=None,
-            )
-        }
-    return {"resources": extract}
+        log.warning("fetch.resources.failed", mine=archive_entry.id, error=str(exc))
+        return ResourceExtract(
+            status="degraded",
+            source_status=FetchStatus.UNAVAILABLE,
+            reason=f"PDF 工具链路失效：{type(exc).__name__}",
+            retrieved_at=state["now"],
+            table=None,
+        )
+
+
+async def fetch_resources(state: BriefState) -> dict[str, Any]:
+    """**范围内每座矿山各抽一次**，不是只抽第一座。
+
+    序列（不是并发）是刻意的：一次日报里储量抽取的条数等于"范围内登记了技术报告
+    直链的矿山数"，量级是几个；而并发会让"回放缺录播炸穿"这件事变成一场竞态 ——
+    哪一座先炸、别的几座有没有把 fixture 读脏，都不再确定。要并发的话，判据是
+    "这几座矿的储量数据**互相独立**吗"—— 独立，但收益（几个请求）不值这个不确定性。
+    """
+    scope = state["scope"]
+    assert scope is not None
+
+    lookups: list[ResourceLookup] = []
+    for entry_ref in scope.entries:
+        archive_entry = next((e for e in ARCHIVE if e.id == entry_ref.id), None)
+        if archive_entry is None:
+            # 范围里的条目必须来自档案（`resolve_entities` 的唯一出口），到这里
+            # 还对不上就说明有人绕过了它。宁可炸，也不要静默少一座矿。
+            raise AssertionError(f"范围里的矿山不在档案中：{entry_ref.id}")
+        lookups.append(ResourceLookup(entry_ref, await _extract_one(state, archive_entry)))
+    return {"resources": tuple(lookups)}
 
 
 # ---------------------------------------------------------------------------
@@ -504,12 +524,14 @@ async def fetch_resources(state: BriefState) -> dict[str, Any]:
 
 
 def compute_signals(state: BriefState) -> dict[str, Any]:
-    """规则引擎。规则集由 02 号工单冻结，07 号工单接上触发逻辑。
+    """规则引擎。规则集由 02 号工单冻结（`docs/risk-rules.md`），本节点只触发、不增删。
 
-    本票里 `RULES` 是空的，所以这条路径的真实输出就是"本次未触发" —— 一条**真**
-    输出，不是待办占位。它不重试、不捕获（ADR-0006）。
+    纯函数：不重试、**不捕获**（ADR-0006）。上游降级导致没数据时该节留空 —— 那是
+    正常路径；它抛异常只可能是规则集自身写错了，就该响亮地炸，不把 bug 伪装成
+    "本次未触发"。**这条"默认产物是未触发"是预期行为，不是失败**：触发需要当天
+    新闻恰好命中，而命中是低频的（`docs/risk-rules.md` §3）。
     """
-    return evaluate(RULES, state)
+    return evaluate(RULES, HINT_RULES, state)
 
 
 # ---------------------------------------------------------------------------
@@ -602,76 +624,158 @@ def _prices_section(state: BriefState, ledger: CitationLedger) -> Section:
     )
 
 
-def _resources_section(state: BriefState, ledger: CitationLedger) -> Section:
-    title = SECTION_TITLES[SectionKey.RESOURCES]
-    extract = state.get("resources")
+def _with_mine(project: str, text: str, multi: bool) -> str:
+    """覆盖多座矿山时给一句话加上矿山名。
 
-    if extract is None:
+    抽成函数是因为这条判据在储量一节里出现三处（事实、缺口、缺口的理由），三处
+    各写一遍 `if multi` 早晚会漂移成不一致 —— 而"有的地方点名了、有的地方没有"
+    正是这一节最容易让人读错的地方。
+    """
+    return f"{project}：{text}" if multi else text
+
+
+def _resources_section(state: BriefState, ledger: CitationLedger) -> Section:
+    """储量一节：**范围内每座登记了技术报告的矿山各出一块**。
+
+    多处刻意的选择，都能被追问：
+
+    1. **多座矿山时，每条事实前面带矿山名**。不带的话"Measured 19 Mt"根本分不清是谁
+       的 —— 一份覆盖八座矿的日报里，这是硬错误而不是风格问题。只覆盖一座时**不加**
+       前缀：那时语义上整节都是它的，加了是噪音。
+    2. **一节里可以出现两种报告体系**（JORC 与 NI 43-101），所以 note 列的是**出现过的**
+       体系全集，不是某一个。
+    3. **`as_of` 取最早的那份报告的日期**。各矿山的报告日期天生不同，而 `as_of` 只有
+       一个位置：取最晚的会**夸大**这一节的新鲜度（读者会以为所有数字都到那一天），
+       取最早的是保守下界。每座矿山自己的日期在引用块里（`timestamp`），可以逐一核。
+    """
+    title = SECTION_TITLES[SectionKey.RESOURCES]
+    lookups = state.get("resources") or ()
+
+    if not lookups:
         return Section(
             key=SectionKey.RESOURCES,
             title=title,
             as_of=None,
             note="数据缺失：本次没有取到储量数据。",
         )
-    if extract.table is None:
+
+    with_tables = [lookup for lookup in lookups if lookup.extract.table is not None]
+    missing = [lookup for lookup in lookups if lookup.extract.table is None]
+    # 覆盖多座矿山时，**每处提到数字或缺口的地方都要点名是那座矿**；只覆盖一座时
+    # 整节都是它的，加前缀反而变噪音。所以下面几处判据是同一个 `multi`。
+    multi = len(lookups) > 1
+
+    if not with_tables:
+        # 一条表都没有 —— 理由要**逐矿**写出来。给一句笼统的"数据缺失"会让读者
+        # 无法判断是八座矿都缺、还是我们只问了一座。
+        reasons = "；".join(
+            _with_mine(lookup.entry.project, lookup.extract.reason or "", multi)
+            for lookup in missing
+        )
         return Section(
-            key=SectionKey.RESOURCES, title=title, as_of=None, note=f"数据缺失 —— {extract.reason}"
+            key=SectionKey.RESOURCES, title=title, as_of=None, note=f"数据缺失 —— {reasons}"
         )
 
-    table = extract.table
-    citation = ledger.cite(
-        kind="resource",
-        title=table.report_title,
-        url=table.pdf_url,
-        publisher=table.standard.value,
-        timestamp=table.report_date,
-    )
-    facts_list: list[Fact] = []
-    for row in table.rows:
-        kind_zh = "资源量" if row.kind.value == "resource" else "储量"
-        tonnage = "未披露吨位" if row.tonnage_mt is None else f"{row.tonnage_mt} Mt"
-        grade = "" if row.grade is None else f"，品位 {row.grade} {row.grade_unit or ''}".rstrip()
-        facts_list.append(
-            Fact(text=f"{row.category.value}（{kind_zh}）：{tonnage}{grade}", citation=citation)
+    facts: list[Fact] = []
+    standards: list[str] = []
+    dates: list[str] = []
+    for lookup in with_tables:
+        table = lookup.extract.table
+        assert table is not None
+        citation = ledger.cite(
+            kind="resource",
+            title=table.report_title,
+            url=table.pdf_url,
+            publisher=table.standard.value,
+            timestamp=table.report_date,
         )
-    facts = tuple(facts_list)
+        if table.standard.value not in standards:
+            standards.append(table.standard.value)
+        if table.report_date not in dates:
+            dates.append(table.report_date)
+        for row in table.rows:
+            kind_zh = "资源量" if row.kind.value == "resource" else "储量"
+            tonnage = "未披露吨位" if row.tonnage_mt is None else f"{row.tonnage_mt} Mt"
+            grade = (
+                "" if row.grade is None else f"，品位 {row.grade} {row.grade_unit or ''}".rstrip()
+            )
+            body = f"{row.category.value}（{kind_zh}）：{tonnage}{grade}"
+            facts.append(
+                Fact(text=_with_mine(lookup.entry.project, body, multi), citation=citation)
+            )
+
+    note = (
+        f"报告体系：{'、'.join(standards)}。"
+        "节内严格区分资源量与储量 —— Indicated / Inferred 是资源量，不是储量。"
+    )
+    if len(dates) > 1:
+        note += (
+            f"各矿山报告日期不同（{'、'.join(sorted(dates))}），"
+            f"本节数据时点取其中**最早**的一份；每座的日期见引用块。"
+        )
+    if missing:
+        # 有内容、也有缺口时，缺口照样要点名 —— 只在第 6 节点名会让这一节的读者
+        # 以为"范围内的矿山都在这里了"。这是本项目的核心纪律，不是可选的修饰。
+        # （走到这里必然是多座矿山：只覆盖一座时，它有表就不缺、缺就一条表都没有，
+        #   那条路上面已经返回了。所以这里点名是必然多余的，用同一个助手保持一致。）
+        gaps = "；".join(
+            _with_mine(lookup.entry.project, lookup.extract.reason or "", multi)
+            for lookup in missing
+        )
+        note += f"另有 {len(missing)} 座未取到：{gaps}"
+
     return Section(
         key=SectionKey.RESOURCES,
         title=title,
-        as_of=table.report_date,
-        facts=facts,
-        note=(
-            f"报告体系：{table.standard.value}。"
-            "节内严格区分资源量与储量 —— Indicated / Inferred 是资源量，不是储量。"
-        ),
+        as_of=min(dates),
+        facts=tuple(facts),
+        note=note,
     )
 
 
 def _risks_section(state: BriefState) -> Section:
+    """风险提示一节。信号进 `facts`，**提示进 `note`** —— 两处，不是一个列表里的两种语气。
+
+    为什么不是"同一条列表、加个前缀"：读者扫这一节时看的是**行首**，前缀读起来像是
+    一种修饰，而这两样东西的差别是**性质**上的（一个是监管要求，一个是我们的观察）。
+    放在 `note` 里同时还有一个副作用：`facts` 为空而 `note` 非空时，这一节读起来
+    就是"没有风险信号，但有几条提示"—— 正是我们要它读成的样子。
+    """
     signals = state.get("signals", ())
     hints = state.get("hints", ())
 
+    # 每条风险信号的三项：**触发它的规则** / **逐字引用的权威原文** / **出处 URL**。
+    # 三项缺一不可 —— 少了出处，"原文"就退化成一句我们自称的引文，读者无从自己核。
+    # 出处**不走引用台账**（`[n]`）：那条路径的语义是"这条事实来自某次工具返回"，
+    # 而法条不是工具返回的东西，它是一份外部文件。混进同一个编号体系会让"引用的
+    # 工具返回值"这条硬规则变味。
     facts = tuple(
         Fact(
             text=(
                 f"[{signal.rule_id}] {signal.title} —— {signal.triggered_by}；"
-                f"原文：{signal.verbatim}"
+                f"原文：{signal.verbatim}；出处：{signal.source_label}（{signal.source_url}）"
             )
         )
         for signal in signals
     )
-    note = None if facts else "本次未触发任何风险信号。"
+
+    parts: list[str] = []
+    if not facts:
+        # **不能留空**：空白会被读成"没有风险"，而事实是"本次没有一条规则被触发"。
+        # 这两句话的差别，正是 PRD §2.2 N3 要防的那种沉默的失真。
+        parts.append("本次未触发任何风险信号。")
+
     if hints:
-        note = (
-            note + " " if note else ""
-        ) + f"另有 {len(hints)} 条提示（未达到逐字引权威原文的门槛）。"
+        listed = " ".join(f"提示（并非风险信号）：{hint.text}" for hint in hints)
+        whys = " ".join(f"为什么它只是提示：{hint.why_not_a_signal}" for hint in hints)
+        parts.append(f"另有 {len(hints)} 条提示（未达到逐字引权威原文的门槛）。{listed}{whys}")
 
     return Section(
         key=SectionKey.RISKS,
         title=SECTION_TITLES[SectionKey.RISKS],
         as_of=state["now"].isoformat(),
         facts=facts,
-        note=note,
+        note=" ".join(parts),
     )
 
 
@@ -683,8 +787,15 @@ def _integrity_section(state: BriefState) -> Section:
     facts: list[Fact] = [
         Fact(text=f"覆盖范围：{projects}；窗口 {scope.window_days} 天。"),
         Fact(text=f"新闻：{_envelope_note(state.get('news'))}"),
-        Fact(text=f"储量：{_envelope_note(state.get('resources'))}"),
     ]
+
+    # 储量**逐矿一行**，理由与价格那一段相同：一份覆盖多座矿山的日报里，一句笼统的
+    # "储量：已取到" 会让缺的那几座藏在一句真话后面（有的取到了、有的一句没有）。
+    resources = state.get("resources") or ()
+    if not resources:
+        facts.append(Fact(text="储量：本次范围内没有需要抽储量的矿山。"))
+    for lookup in resources:
+        facts.append(Fact(text=f"储量（{lookup.entry.project}）：{_envelope_note(lookup.extract)}"))
 
     prices = state.get("prices") or {}
     if not prices:

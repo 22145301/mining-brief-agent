@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Mapping
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -14,13 +15,14 @@ from typing import Any
 import pytest
 
 from mining_brief.agent import nodes
+from mining_brief.agent.llm import LLMClient, LLMError, build_llm_client
 from mining_brief.agent.pipeline import run_brief
 from mining_brief.agent.toolkit import default_toolkit
 from mining_brief.config.archive import ARCHIVE
 from mining_brief.config.reports import PILBARA_CET
 from mining_brief.config.settings import Settings
 from mining_brief.config.sources import NEWS_SOURCES
-from mining_brief.contracts import BriefResult, FetchStatus, SectionKey
+from mining_brief.contracts import BriefResult, FetchStatus, NewsCategory, NewsItem, SectionKey
 from mining_brief.datasources.fixtures import FixtureStore
 from mining_brief.datasources.news import parse_feed
 from mining_brief.datasources.prices import trading_date
@@ -353,6 +355,221 @@ async def test_uncovered_mine_is_refused_and_never_invented(
     assert "未覆盖" in result.refusal.why
     assert "Pilgangoora" in result.refusal.why  # 列出可选项，让使用者知道系统覆盖什么
     assert result.uncovered[0].spoken == "Escondida"
+
+
+#: 用来扫产物有没有幻觉实体的词。与 `tests/test_archive.py` 的负样本同源但**不共用** ——
+#: 那边考的是 `match_entry` 会不会把它们落进档案，这边考的是"编造出来的实体有没有
+#: 漏进产物"，两件事，所以两处各写一份、各自演进。
+_OUTSIDE_THE_ARCHIVE_PROBES = ("Escondida", "Grasberg", "Olympic Dam", "Bougainville")
+
+
+async def test_the_uncovered_path_puts_no_invented_entity_into_the_document(
+    settings: Settings, fixture_root: Path
+) -> None:
+    """A9 的第二半：拒答文档**不是**简报，它一个字的事实都不该有。
+
+    上一条断言的是"拒答说对了话"，这一条断言的是"拒答**没有**变成一份简报" ——
+    少了它，一个"先拒答、又顺手出一份含幻觉实体的日报"的实现照样能让上一条全绿。
+    """
+    result = await _run(settings, fixture_root, "看看 Escondida 铜矿最近 3 天")
+
+    text = Path(result.output_path).read_text("utf-8")
+    assert result.sections == (), "拒答路径不该产出六节"
+    assert result.citations == (), "拒答路径不该产出引用块"
+
+    refusal = result.refusal
+    assert refusal is not None
+
+    # 拒绝理由里**当然**会写「Escondida」—— 那正是这次被拒的原因。要证明的不是
+    # "这两个字不出现"，而是"它只出现在**说明为什么拒绝**的两个字段里，没有变成事实"。
+    # 所以先把这两处摘掉，剩下的任何一次出现都只能是编造出来的内容。
+    body = text.split("无法生成矿权日报", 1)[-1]
+    residue = body.replace(refusal.understood, "").replace(refusal.why, "")
+    leaks = [name for name in _OUTSIDE_THE_ARCHIVE_PROBES if name in residue]
+    assert not leaks, (
+        f"拒答文档的正文里出现了档案外实体：{leaks} —— 拒绝可以复述使用者说的话，"
+        "但不能再吐出任何关于它的内容"
+    )
+
+
+# ---------------------------------------------------------------------------
+# 降级缺省：听不懂 ≠ 拒答，它是一次**成功执行**，但必须自曝
+# ---------------------------------------------------------------------------
+
+
+class _IntentDeafLLM:
+    """除了 `parse_intent` 一律照常转发给真回放客户端。
+
+    **这不是"伪造一份录播"。** 被模拟的诱因（模型这次答不上来）本来就发生在运行时，
+    真实世界里由网络超时或服务端 5xx 触发；这里只是把触发条件换成一个显式的桩子，
+    被测的代码路径一字未改 —— `parse_intent` 的 `except` 分支 + 第 6 节的记一笔。
+    录播文件不动，所以"回放缺录播会炸"那条纪律也没被绕过。
+    """
+
+    def __init__(self, inner: LLMClient) -> None:
+        self._inner = inner
+        self.nodes: list[str] = []
+
+    async def complete(
+        self, *, node: str, key_input: Mapping[str, Any], system: str, user: str
+    ) -> str:
+        self.nodes.append(node)
+        if node == "parse_intent":
+            raise LLMError("模拟：模型服务这次没答上来")
+        return await self._inner.complete(node=node, key_input=key_input, system=system, user=user)
+
+
+async def test_unparsable_request_degrades_to_defaults_and_says_so(
+    settings: Settings, fixture_root: Path, llm_fixture_root: Path
+) -> None:
+    """参数解析不出来 → 按缺省值出报，**并在第 6 节写明这是缺省值**（User Story 25）。
+
+    后一半才是这条用例的要害。"按缺省值出报"很容易做到，难的是**不装作听懂了** ——
+    一份按缺省值出的日报若不留痕，使用者只会看到一份看起来很正常的日报，
+    而它其实没听懂自己的问题。
+    """
+    inner = build_llm_client(settings, fixture_root=llm_fixture_root)
+    deaf = _IntentDeafLLM(inner)
+
+    result = await _run(settings, fixture_root, "随便给我来一份", llm=deaf)
+
+    assert deaf.nodes.count("parse_intent") == 1, "parse_intent 应当被调用且只调一次"
+    assert result.refusal is None, "降级不是拒答 —— 交不出简报才是拒答"
+
+    integrity = next(s for s in result.sections if s.key is SectionKey.INTEGRITY)
+    marked = [fact.text for fact in integrity.facts if "降级" in fact.text]
+    assert marked, "第 6 节没有记下降级这笔 —— 缺省值被伪装成了「听懂」"
+    assert "LLMError" in marked[0], f"记一笔要说清是哪一类失败：{marked[0]}"
+
+    text = Path(result.output_path).read_text("utf-8")
+    assert "降级为缺省值" in text, "缺省值这件事必须出现在**产物**里，而不只在内存里"
+
+
+# ---------------------------------------------------------------------------
+# 重试：工具链瞬时故障不该直接变成"数据缺失"
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# 风险提示：触发路径与未触发路径（工单 07 的两条端到端验收）
+# ---------------------------------------------------------------------------
+
+
+class _NewsWith:
+    """把新闻工具换成一份**指定的**结果，其余照旧。
+
+    这不绕过任何被测代码：被换掉的是"上游给了什么"，而这一节要考的是"拿到这样一份
+    新闻之后，图说了什么"。规则的可见面本来就只有 `news.items[*]`，所以把那一份
+    喂准了，测的才是规则引擎而不是今天的 RSS 恰好写了什么。
+    """
+
+    def __init__(self, inner: Any, items: tuple[NewsItem, ...]) -> None:
+        self._inner = inner
+        self._items = items
+
+    async def search_news(self, query: str, days: int) -> Any:
+        envelope = await self._inner.search_news(query, days)
+        return envelope.model_copy(update={"items": self._items})
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
+
+
+def _item(title: str, summary: str = "", category: NewsCategory = NewsCategory.GENERAL) -> NewsItem:
+    return NewsItem(
+        title=title,
+        url="https://example.invalid/story",
+        source="MINING.COM",
+        published_at="2026-10-07T03:00:00+00:00",
+        summary=summary,
+        category=category,
+    )
+
+
+async def test_a_triggering_rule_reaches_the_document_with_its_verbatim(
+    settings: Settings, fixture_root: Path, canonical_request: str
+) -> None:
+    """切面 S1 的触发路径：一条规则被触发时，产物里能看到**规则 + 逐字原文 + 出处**。
+
+    尾部那句"若该主体在 ASX 上市"是 R4 刻意留下的**条件从句** —— 我们判不了该新闻
+    主体在哪上市，所以写成提醒而不是断言。这条把它钉住，免得日后有人"顺手"把它
+    改写成一句看起来很确定的结论。
+    """
+    toolkit = _NewsWith(
+        default_toolkit(),
+        (
+            _item(
+                "Company reaffirms production target at Pilgangoora",
+                "The company said it will hit guidance.",
+            ),
+            _item(
+                "PEA shows robust economics at the project",
+                "Initial capital cost estimate released.",
+            ),
+        ),
+    )
+    result = await _run(settings, fixture_root, canonical_request, toolkit=toolkit)
+    risks = next(s for s in result.sections if s.key is SectionKey.RISKS)
+
+    assert risks.facts, "这两条新闻该各触发一条规则"
+    ids = {fact.text.split("]")[0].lstrip("[") for fact in risks.facts}
+    assert ids == {"R3", "R4"}, f"触发的规则集不对：{ids}"
+
+    body = "\n".join(fact.text for fact in risks.facts)
+    assert "too speculative geologically" in body, "R3 的逐字原文没进产物"
+    assert "low level of geological confidence" in body, "R4 的逐字原文没进产物"
+
+    text = Path(result.output_path).read_text("utf-8")
+    assert "若该主体在 ASX 上市" in text, "R4 的条件从句必须原样出现在产物里"
+    assert "nssc.novascotia.ca" in text or "asx.com.au" in text, "出处要跟着一起露出来"
+    assert not (risks.note or "").startswith("本次未触发"), "触发了就不该再说未触发"
+
+
+async def test_a_run_with_no_triggering_news_says_so_explicitly(
+    settings: Settings, fixture_root: Path, canonical_request: str
+) -> None:
+    """切面 S1 的未触发路径：**明说**未触发，而不是留一片空白。
+
+    空白会被读成"今天没有风险"。而真实情况是"今天没有一条规则被触发" —— 这两句话
+    对读者的含义完全不同，且后者才是我们知道的。
+    """
+    result = await _run(settings, fixture_root, canonical_request)
+    risks = next(s for s in result.sections if s.key is SectionKey.RISKS)
+
+    assert risks.facts == ()
+    assert risks.note is not None
+    assert "本次未触发任何风险信号" in risks.note
+
+    text = Path(result.output_path).read_text("utf-8")
+    assert "本次未触发任何风险信号" in text, "这件事必须出现在产物里，而不只在内存里"
+
+
+async def test_hints_appear_in_the_document_separately_from_signals(
+    settings: Settings, fixture_root: Path, canonical_request: str
+) -> None:
+    """切面 S3 的正向面：**提示**要出现在产物里，且与风险信号分开。
+
+    "分开"不是排版洁癖：读者扫这一节时看的是行首 —— 风险信号每行带 `[R#]` 与法条，
+    提示不带。把无原文的观察混进 `facts`，两者就再也分不清了，而"这一条到底有没有
+    法条支撑"正是这一节唯一的价值所在。
+    """
+    toolkit = _NewsWith(
+        default_toolkit(),
+        (_item("Pilbara project suspended pending permit review"),),
+    )
+    result = await _run(settings, fixture_root, canonical_request, toolkit=toolkit)
+    risks = next(s for s in result.sections if s.key is SectionKey.RISKS)
+
+    assert risks.facts == (), "这条观察引不到原文，不该变成风险信号"
+    assert risks.note is not None
+    assert "提示（并非风险信号）" in risks.note
+    assert "project suspended" in risks.note, "提示要引出那条新闻"
+    assert "为什么它只是提示" in risks.note, "提示必须自曝为什么它不是信号"
+
+    text = Path(result.output_path).read_text("utf-8")
+    assert "提示（并非风险信号）" in text
+    # 行首判据：`facts` 里的每一行都要带 `[R` 前缀，提示不在 `facts` 里。
+    assert "[R" not in risks.note, "提示行不该带规则编号 —— 它不是信号"
 
 
 # ---------------------------------------------------------------------------
