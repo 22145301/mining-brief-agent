@@ -153,8 +153,12 @@ PricePoint = {
   as_of,                            # ISO8601
   delayed: bool,                    # LME 为 true（延迟一日收盘）
   source_url,
+  requested_date,                   # 调用方要的日期，可能 ≠ as_of（见 ADR-0004）
 }
 ```
+
+> **注**：`requested_date` 与 `delayed` 的语义区分见 `docs/adr/0004-price-adapter-falls-back-and-splits-dates.md`。
+> `delayed` 表示**数据源固有**延迟；"回退到了更早的日期"一律由 `as_of < requested_date` 表达，不设独立标志位。
 
 ### 6.2 Agent 编排（LangGraph）
 
