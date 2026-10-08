@@ -31,6 +31,9 @@ npm-debug.log*
 *.db
 *.sqlite3
 
+# Word / Office 临时锁文件
+~$*
+
 # 编辑器与操作系统
 .vscode/
 .idea/
