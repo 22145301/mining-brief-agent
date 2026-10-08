@@ -244,7 +244,10 @@ def test_the_fixture_root_does_not_depend_on_the_working_directory() -> None:
         "print(REPO_ROOT)\n"
     )
     proc = subprocess.run(
-        [sys.executable, "-c", code],
+        # `-X utf8`：子进程的 stdout 是**管道**，Windows 上按 locale 编码（本机 cp936），
+        # 而仓库路径里带中文 —— 不钉住编码，这条用例的成败就取决于跑它的是哪台机器，
+        # 报出来的还是 `stdout is None` 这种看不懂的错（父进程那个 utf-8 解码线程先炸了）。
+        [sys.executable, "-X", "utf8", "-c", code],
         capture_output=True,
         cwd=tempfile.gettempdir(),
         text=True,
