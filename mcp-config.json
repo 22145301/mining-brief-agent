@@ -1,0 +1,28 @@
+{
+  "mcpServers": {
+    "mining-news-mcp": {
+      "command": "uv",
+      "args": ["run", "--directory", "${workspaceFolder}", "mining-news-mcp"],
+      "env": {
+        "MINING_DATA_MODE": "replay",
+        "MINING_LLM_MODE": "replay"
+      }
+    },
+    "lme-price-mcp": {
+      "command": "uv",
+      "args": ["run", "--directory", "${workspaceFolder}", "lme-price-mcp"],
+      "env": {
+        "MINING_DATA_MODE": "replay",
+        "MINING_LLM_MODE": "replay"
+      }
+    },
+    "mineral-pdf-mcp": {
+      "command": "uv",
+      "args": ["run", "--directory", "${workspaceFolder}", "mineral-pdf-mcp"],
+      "env": {
+        "MINING_DATA_MODE": "replay",
+        "MINING_LLM_MODE": "replay"
+      }
+    }
+  }
+}

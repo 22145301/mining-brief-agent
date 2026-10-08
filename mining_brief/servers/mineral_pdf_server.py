@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from mcp.server.fastmcp import FastMCP
 
+from mining_brief.config.logging import configure_logging
 from mining_brief.contracts import ResourceExtract
 from mining_brief.servers.runtime import Runtime, default_runtime
 
@@ -56,6 +57,8 @@ async def extract_resources(pdf_url: str) -> ResourceExtract:
 
 
 def main() -> None:
+    # 日志先锁到 stderr：stdio 传输下 stdout 只归协议所有（工单 09 验收项）。
+    configure_logging()
     mcp.run()
 
 

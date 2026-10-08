@@ -36,6 +36,12 @@ dev = [
 
 [project.scripts]
 mining-brief = "mining_brief.cli:main"
+# 三个 server 各有一个同名入口（名字照题面，不自创）。`mcp-config.json` 挂的就是它们 ——
+# 挂 `python -m mining_brief.servers.xxx` 也能跑，但那样宿主配置里就得出现一条路径假设，
+# 而控制台脚本由 `uv run` / `uv tool install` 负责把名字放到 PATH 上。
+mining-news-mcp = "mining_brief.servers.news_server:main"
+lme-price-mcp = "mining_brief.servers.price_server:main"
+mineral-pdf-mcp = "mining_brief.servers.mineral_pdf_server:main"
 
 [build-system]
 requires = ["hatchling"]

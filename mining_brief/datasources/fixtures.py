@@ -16,10 +16,9 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
+from mining_brief.config.paths import fixture_root
 from mining_brief.contracts import RawResponse
 from mining_brief.errors import ReplayMiss
-
-DEFAULT_FIXTURE_DIR = Path("fixtures")
 
 
 class FixtureMissing(ReplayMiss, LookupError):
@@ -60,8 +59,8 @@ class FixtureManifest(BaseModel):
 
 
 class FixtureStore:
-    def __init__(self, root: Path | str = DEFAULT_FIXTURE_DIR) -> None:
-        self.root = Path(root)
+    def __init__(self, root: Path | str | None = None) -> None:
+        self.root = Path(root) if root is not None else fixture_root()
         manifest_path = self.root / "sources.json"
         if not manifest_path.exists():
             raise FixtureMissing(f"缺少 fixture 清单：{manifest_path}")
@@ -109,8 +108,9 @@ class FixtureStore:
         )
 
 
-def read_manifest(root: Path | str = DEFAULT_FIXTURE_DIR) -> FixtureManifest:
-    return FixtureManifest.model_validate_json((Path(root) / "sources.json").read_text("utf-8"))
+def read_manifest(root: Path | str | None = None) -> FixtureManifest:
+    base = Path(root) if root is not None else fixture_root()
+    return FixtureManifest.model_validate_json((base / "sources.json").read_text("utf-8"))
 
 
 def write_manifest(root: Path | str, payload: dict[str, object]) -> None:

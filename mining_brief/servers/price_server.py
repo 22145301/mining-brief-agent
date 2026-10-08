@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from mcp.server.fastmcp import FastMCP
 
+from mining_brief.config.logging import configure_logging
 from mining_brief.contracts import PriceLookup, PriceSeries
 from mining_brief.datasources.prices import SUPPORTED_COMMODITIES
 from mining_brief.servers.runtime import Runtime, default_runtime
@@ -81,6 +82,8 @@ __all__ = ["SUPPORTED_COMMODITIES", "mcp", "set_runtime"]
 
 
 def main() -> None:
+    # 日志先锁到 stderr：stdio 传输下 stdout 只归协议所有（工单 09 验收项）。
+    configure_logging()
     mcp.run()
 
 

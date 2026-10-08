@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from mcp.server.fastmcp import FastMCP
 
+from mining_brief.config.logging import configure_logging
 from mining_brief.contracts import ArticleLookup, NewsSearchResult
 from mining_brief.servers.runtime import Runtime, default_runtime
 
@@ -62,6 +63,9 @@ async def fetch_article(url: str) -> ArticleLookup:
 
 def main() -> None:
     """stdio 入口 —— `mcp-config.json` 挂的就是它。"""
+    # 先把日志锁到 stderr 再开跑：stdio 传输下 stdout 只归协议所有，
+    # 一条日志写进去，客户端看到的就是一段解不开的 JSON（工单 09 验收项）。
+    configure_logging()
     mcp.run()
 
 

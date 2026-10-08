@@ -18,6 +18,7 @@ from mining_brief.agent.render import write_brief
 from mining_brief.agent.state import BriefState
 from mining_brief.agent.toolkit import ToolKit, default_toolkit
 from mining_brief.config.logging import get_logger
+from mining_brief.config.paths import llm_fixture_root
 from mining_brief.config.settings import Settings
 from mining_brief.contracts import BriefResult
 from mining_brief.servers.runtime import Runtime
@@ -25,7 +26,7 @@ from mining_brief.servers.runtime import Runtime
 log = get_logger(__name__)
 
 
-def resolve_now(settings: Settings, *, fixture_root: Path | str = "fixtures") -> datetime:
+def resolve_now(settings: Settings, *, fixture_root: Path | str | None = None) -> datetime:
     """回放模式下的"现在"。
 
     刻意走 `Runtime` 而不是 `datetime.now()` —— 让"回放里没有系统时钟"这条规矩
@@ -38,8 +39,8 @@ async def run_brief(
     request_text: str,
     *,
     settings: Settings | None = None,
-    fixture_root: Path | str = "fixtures",
-    llm_root: Path | str = "fixtures/llm",
+    fixture_root: Path | str | None = None,
+    llm_root: Path | str | None = None,
     toolkit: ToolKit | None = None,
     llm: LLMClient | None = None,
     graph: Graph | None = None,
@@ -58,7 +59,12 @@ async def run_brief(
         "request_text": request_text,
         "now": now or resolve_now(settings, fixture_root=fixture_root),
         "settings": settings,
-        "llm": llm or build_llm_client(settings, fixture_root=llm_root, recorder=recorder),
+        "llm": llm
+        or build_llm_client(
+            settings,
+            fixture_root=llm_root if llm_root is not None else llm_fixture_root(),
+            recorder=recorder,
+        ),
         "toolkit": toolkit or default_toolkit(),
     }
 

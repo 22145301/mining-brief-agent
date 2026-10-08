@@ -61,8 +61,8 @@ def brief(
     out: Path | None = typer.Option(
         None, "--out", help="日报落盘目录。默认取 MINING_OUTPUT_DIR，再默认 briefs/。"
     ),
-    fixture_root: Path = typer.Option(
-        Path("fixtures"), "--fixture-root", help="回放用的录播根目录。"
+    fixture_root: Path | None = typer.Option(
+        None, "--fixture-root", help="回放用的录播根目录。默认仓库根下的 fixtures/。"
     ),
 ) -> None:
     """生成一份矿权日报，**只把产物路径打到 stdout**（PRD §5.3）。"""

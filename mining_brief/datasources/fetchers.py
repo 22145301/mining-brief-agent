@@ -245,7 +245,7 @@ class RoutingFetcher:
 def build_fetcher(
     *,
     data_mode: str,
-    fixture_root: Path | str = "fixtures",
+    fixture_root: Path | str | None = None,
     timeout_s: float,
     browser_timeout_s: float,
     user_agent: str,

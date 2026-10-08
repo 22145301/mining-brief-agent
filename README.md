@@ -39,6 +39,29 @@ uv run pytest                                                 # 测（默认离�
 
 默认模式**不需要任何 API key、不联网、结果确定**。`--live` 是唯一的实时开关。
 
+### 挂进 MCP 宿主（Claude Desktop / Cursor / Claude Code）
+
+三个 server 也能**脱离这份日报**单独用。根目录的 [`mcp-config.json`](mcp-config.json)
+把三个都列好了，都是 `uv run --directory ${workspaceFolder} <server 名>`：
+
+- **Cursor / Claude Code（项目级）**：`${workspaceFolder}` 由宿主替换成仓库路径，**原样可用**。
+- **Claude Desktop**：它不做变量替换，把 `${workspaceFolder}` 换成 clone 的绝对路径即可
+  （`sed -i "s|\${workspaceFolder}|$PWD|g" mcp-config.json`）。
+- 想再省一步：`uv tool install .` 会把三个名字放进 PATH，此时 `command` 直接写
+  `mining-news-mcp` 就行 —— 但要把 `MINING_FIXTURE_ROOT` 指向 clone 里的 `fixtures/`
+  （工具装到别处的 venv 里了，录播不在它旁边）。
+
+自查一条命令：
+
+```bash
+claude mcp list        # 三个都该是 ✔ Connected
+```
+
+在真宿主里实测过（2026-10-08，Claude Code，`✔ Connected` × 3）。两个细节让这件事成立：
+**默认录播根按安装位置推、不按 cwd 推**（宿主拉起 server 时工作目录是宿主的），
+以及**日志一律走 stderr**（stdio 传输下 stdout 只归协议所有）。两条都有用例守着，
+见 `tests/test_stdio_smoke.py`。
+
 ## 数据源与取舍（如实声明）
 
 | 数据 | 采用的源 | 状态 |

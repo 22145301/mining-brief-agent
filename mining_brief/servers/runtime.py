@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from functools import lru_cache
 from pathlib import Path
 
+from mining_brief.config.paths import fixture_root as default_fixture_root
 from mining_brief.config.settings import Settings
 from mining_brief.config.sources import browser_urls
 from mining_brief.datasources.fetchers import Fetcher, build_fetcher
@@ -18,18 +19,20 @@ from mining_brief.datasources.news import NewsAdapter
 from mining_brief.datasources.prices import PriceAdapter
 from mining_brief.datasources.resources import ResourceAdapter, build_resource_source
 
-DEFAULT_FIXTURE_ROOT = Path("fixtures")
-
 
 class Runtime:
     def __init__(
         self,
         settings: Settings,
         *,
-        fixture_root: Path | str = DEFAULT_FIXTURE_ROOT,
+        fixture_root: Path | str | None = None,
     ) -> None:
         self.settings = settings
-        self.fixture_root = Path(fixture_root)
+        # 默认按**安装位置**推，不按 cwd 推：同一个 server 被 MCP 宿主拉起时，
+        # 工作目录是宿主的（见 config/paths.py 的说明）。
+        self.fixture_root = (
+            Path(fixture_root) if fixture_root is not None else default_fixture_root()
+        )
         self._store: FixtureStore | None = None
 
     @property
