@@ -159,9 +159,16 @@ def render_markdown(result: BriefResult) -> str:
 
 
 def write_brief(result: BriefResult) -> str:
-    """落盘并返回**绝对路径**。这是本模块唯一的副作用。"""
+    """落盘并返回**绝对路径**。这是本模块唯一的副作用。
+
+    `newline="\n"` 不是可有可无的：不写它，Windows 上 `write_text` 会把每个 `\n`
+    翻成 `\r\n`，于是**同一份回放数据在 Windows 与容器里落出不同的字节**
+    （实测 4850 B / CRLF vs 4849 B / LF，sha256 因此不同）。产物是我们对外的
+    交付物，"同一输入逐字节相同"这句话必须在跨平台时也成立，所以换行符由我们
+    钉死成 LF，交给 git / 编辑器按各自习惯处理。
+    """
     path = Path(result.output_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(render_markdown(result), encoding="utf-8")
+    path.write_text(render_markdown(result), encoding="utf-8", newline="\n")
     log.info("brief.written", path=str(path))
     return str(path.resolve())
