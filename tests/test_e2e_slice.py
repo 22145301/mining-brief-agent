@@ -17,12 +17,16 @@ from mining_brief.agent import nodes
 from mining_brief.agent.pipeline import run_brief
 from mining_brief.agent.toolkit import default_toolkit
 from mining_brief.config.archive import ARCHIVE
+from mining_brief.config.reports import PILBARA_CET
 from mining_brief.config.settings import Settings
 from mining_brief.config.sources import NEWS_SOURCES
 from mining_brief.contracts import BriefResult, FetchStatus, SectionKey
 from mining_brief.datasources.fixtures import FixtureStore
 from mining_brief.datasources.news import parse_feed
 from mining_brief.datasources.prices import trading_date
+from mining_brief.datasources.resources import LiveResourceSource, ResourceAdapter
+from mining_brief.servers import mineral_pdf_server
+from mining_brief.servers.runtime import Runtime
 
 ALL_SECTIONS = [
     SectionKey.MINING_RIGHTS,
@@ -60,14 +64,14 @@ async def test_canonical_request_produces_all_six_sections(
     ]
 
 
-async def test_news_and_prices_have_content_while_reserves_says_why_it_is_empty(
+async def test_all_three_sources_have_content_after_ticket_05(
     settings: Settings, fixture_root: Path, canonical_request: str
 ) -> None:
-    """工单 01 的核心断言：**源缺失时简报照样出**，而且缺得明明白白。
+    """工单 05 之后，三个源**全部在位**：新闻有事实、储量有数字、价格有行情。
 
-    工单 03 之后价格一节从"必缺"变成了"有数"，所以这条同时承担起一个新的任务：
-    证明**接通与未接通在同一次装配里各就各位** —— 价格有事实、储量有理由，
-    两者不能互相污染（把小票的降级文案漏进大票，或反过来）。
+    这条同时接手了工单 01 留下的那个任务：证明**接通与未接通在同一次装配里各就各位**
+    —— 三者不能互相污染（把某一节的降级文案漏进另一节，或反过来）。工单 01 时储量还
+    没接通，这条记的是"缺得明明白白"；现在它记的是"接上了，而且数字带着出处"。
     """
     result = await _run(settings, fixture_root, canonical_request)
     by_key = {section.key: section for section in result.sections}
@@ -90,8 +94,28 @@ async def test_news_and_prices_have_content_while_reserves_says_why_it_is_empty(
     assert prices.as_of != trading_date(FixtureStore(fixture_root).anchor_at).isoformat()
 
     resources = by_key[SectionKey.RESOURCES]
-    assert resources.facts == ()
-    assert "数据缺失" in (resources.note or "")
+    assert len(resources.facts) == 3, "Pilgangoora 那张 JORC 表有三行"
+    assert all(fact.citation is not None for fact in resources.facts), "储量数字也要能翻回那份 PDF"
+    # 事实上的 `citation` 是来源清单里的**序号**（见 `Fact`），要顺着它去清单里取。
+    by_index = {citation.index: citation for citation in result.citations}
+    cited = by_index[resources.facts[0].citation or 0]
+    assert cited.url == PILBARA_CET.pdf_url
+    assert cited.publisher == "JORC", "报告体系要跟着引用一起露出来"
+    # 报告日期来自**文档**（表下那句 "as at 30 June 2022"），不是我们的抓取时点。
+    assert resources.as_of == "2022-06-30"
+    # 这一节的 `note` 是**释义**（报告体系 + 资源量与储量之别），不是降级说明 ——
+    # 所以这里不能要求 `note is None`，而要钉住"它没在说任何东西缺失"。区分这两类
+    # note 是有意义的：把释义误当降级删掉，读者就不知道 Indicated 不是储量；
+    # 反过来把降级说明当成释义放过去，一处真缺口就会被一段像模像样的话盖住。
+    note = resources.note or ""
+    assert "JORC" in note, "报告体系要跟着数字一起露出来"
+    assert "资源量" in note, "节内要说清哪些是资源量"
+    for missing in ("数据缺失", "未取到", "尚未", "失效"):
+        assert missing not in note, f"数字都在，note 里不该出现「{missing}」"
+
+    reserve_text = " ".join(fact.text for fact in resources.facts)
+    assert "资源量" in reserve_text, "这三行都是资源量，节内必须标出来"
+    assert "储量" not in reserve_text, "Measured / Indicated / Inferred 不是储量，不许混称"
 
     risks = by_key[SectionKey.RISKS]
     assert risks.facts == ()
@@ -99,11 +123,11 @@ async def test_news_and_prices_have_content_while_reserves_says_why_it_is_empty(
 
     # 第 6 节存在的意义就是"说清缺了什么、为什么缺"，不是一句免责声明。
     integrity = " ".join(fact.text for fact in by_key[SectionKey.INTEGRITY].facts)
-    assert "数据缺失" in integrity  # 储量为什么缺
-    assert "直链未核实到" in integrity
-    assert "已取到" in integrity  # 价格取到了几个点
-    # 价格已经接通，就不能再在任何地方说它"尚未接入" —— 一句过期的免责声明
+    assert integrity.count("已取到") >= 3, "新闻 / 储量 / 价格三个源都该报「已取到」"
+    # 锚定时刻三源齐备，所以第 6 节**不该**再说任何东西缺失 —— 一句过期的免责声明
     # 比没有更糟：它会让人以为去看别处也拿不到数。
+    assert "数据缺失" not in integrity
+    assert "直链未核实到" not in integrity
     assert "尚未接入" not in integrity
 
 
@@ -237,18 +261,13 @@ class _ConcurrencyProbe:
 
 
 async def test_three_fetch_nodes_run_in_the_same_superstep(
-    settings: Settings, fixture_root: Path, canonical_request: str, monkeypatch: pytest.MonkeyPatch
+    settings: Settings, fixture_root: Path, canonical_request: str
 ) -> None:
     """三个 fetch 节点在同一 superstep 并发执行（工单 01 验收）。
 
-    本票的档案里 Pilgangoora 没有技术报告直链，`fetch_resources` 会在**调用工具之前**
-    就提前返回"数据缺失"。那本身是对的，但会让这条并发断言只观测到 2 个。所以这里
-    临时给档案补一个直链 —— 测的是"三路并发"这个拓扑性质，不是"直链存不存在"。
+    工单 05 之后档案里有了真实的技术报告直链，三路**都会真的去调工具**，所以这条
+    断言不再需要临时补一个直链才能观测到 3 —— 观测对象就是生产装配本身。
     """
-    monkeypatch.setattr(
-        nodes, "ARCHIVE", (replace(ARCHIVE[0], report_url="https://example.invalid/report.pdf"),)
-    )
-
     probe = _ConcurrencyProbe(default_toolkit())
     result = await _run(settings, fixture_root, canonical_request, toolkit=probe)
 
@@ -284,12 +303,13 @@ async def test_one_exploding_fetch_still_produces_a_full_brief(
     fixture_root: Path,
     canonical_request: str,
     explode: str,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """ADR-0006：LangGraph 的 superstep 是事务性的，**没有这层兜底整张图会炸**。"""
-    monkeypatch.setattr(
-        nodes, "ARCHIVE", (replace(ARCHIVE[0], report_url="https://example.invalid/report.pdf"),)
-    )
+    """ADR-0006：LangGraph 的 superstep 是事务性的，**没有这层兜底整张图会炸**。
+
+    工单 05 之后三个源全部在位，这一条才真正成为 A7 的那一问 —— "三个源都在、人为让
+    任一源故障"（工单 05 验收最后一条）。在此之前 `extract_resources` 那一遍是在一个
+    假直链上炸的，考不到真实装配。
+    """
     toolkit = _ExplodingToolkit(default_toolkit(), explode)
 
     result = await _run(settings, fixture_root, canonical_request, toolkit=toolkit)
@@ -366,20 +386,56 @@ async def test_transient_toolkit_failure_is_retried_before_degrading(
     assert "失效" not in (by_key[SectionKey.NEWS].note or "")
 
 
-async def test_a_source_that_cannot_deliver_names_itself_and_its_reason(
-    settings: Settings, fixture_root: Path, canonical_request: str
-) -> None:
-    """一个"取不到"的源要说清是**哪一个**、**为什么**，而不是一句干巴巴的"数据缺失"。
+class _RuntimeWithABrokenReport(Runtime):
+    """把技术报告的观测地址换成清单里那条**真实录下来的** 503，其余照旧。
 
-    工单 03 之后价格已经接通，所以这里拿储量（技术报告直链未核实到）当样本 ——
-    它是锚定时刻唯一还取不到的源。
+    手法与 `test_price_tool` 里的同款，理由也一样：只换一个地址、不动任何代码路径，
+    所以它证明的是"链路对上游拒绝服务的反应"，不是"我们给测试开了个后门"。
+
+    这里绕开了 `build_resource_source` 的模式分支（回放模式下它给的是
+    `FrozenResourceSource`，压根不碰网络），直接构造 `LiveResourceSource` ——
+    而它接的仍是回放的 `FixtureFetcher`，读的是那只录下来的 503。
+    """
+
+    def __init__(self, settings: Settings, fault_url: str) -> None:
+        super().__init__(settings)
+        self._fault_url = fault_url
+
+    def resources(self) -> ResourceAdapter:
+        return ResourceAdapter(
+            LiveResourceSource(
+                self.fetcher(),
+                {PILBARA_CET.slug: replace(PILBARA_CET, pdf_url=self._fault_url)},
+            )
+        )
+
+
+async def test_a_source_that_cannot_deliver_names_itself_and_its_reason(
+    settings: Settings,
+    fixture_root: Path,
+    canonical_request: str,
+    fault_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """一个"取不到"的源要说清**为什么**，而不是一句干巴巴的"数据缺失"。
+
+    样本是清单里那条**真实录下来的** 503：把储量源的观测地址换成它，跑完整一次日报。
+    工单 05 之后三个源全部在位，所以这一条同时是 A7 的一条实证 —— 源故障不掀翻整张图，
+    缺口被如实记进第六节。
 
     这个理由必须**同时**出现在它自己那一节和第六节里，而且是同一句话：只在一处
     出现，读者就得在两节之间来回翻，翻不到就会怀疑是漏了还是坏了。
     """
+    monkeypatch.setattr(nodes, "ARCHIVE", (replace(ARCHIVE[0], report_url=fault_url),))
+    monkeypatch.setattr(
+        mineral_pdf_server, "_runtime_override", _RuntimeWithABrokenReport(settings, fault_url)
+    )
+
     result = await _run(settings, fixture_root, canonical_request)
     by_key = {section.key: section for section in result.sections}
 
+    assert result.refusal is None
+    assert [section.key for section in result.sections] == ALL_SECTIONS
     assert by_key[SectionKey.NEWS].facts, "新闻是好的 —— 否则下面缺的就不止一处，断言会失焦"
 
     note = by_key[SectionKey.RESOURCES].note or ""
@@ -387,7 +443,7 @@ async def test_a_source_that_cannot_deliver_names_itself_and_its_reason(
     # 理由按分隔符切出来，不做字符集 strip —— 那会把理由里本来就有的标点一起啃掉。
     reason = note.split("——", 1)[-1].strip()
     assert len(reason) > 8, "光说'数据缺失'等于没说：读者无法据此去查任何一个地方"
-    assert "直链" in reason, "理由要指到具体那一步（这里：技术报告的直链没核实到）"
+    assert "503" in reason, "理由要指到具体那一步（这里：技术报告源回了 503）"
 
     integrity = " ".join(fact.text for fact in by_key[SectionKey.INTEGRITY].facts)
     assert reason in integrity, "同一个理由要在第六节里原样再出现一次，不能让读者去猜"

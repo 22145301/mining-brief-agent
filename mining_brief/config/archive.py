@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from mining_brief.config.reports import PILBARA_CET
 from mining_brief.contracts import Commodity
 
 
@@ -24,8 +25,11 @@ class ArchiveEntry:
     """中文别称、英文简称等使用者可能脱口而出的说法。"""
 
     report_url: str | None = None
-    """技术报告直链。`None` 表示**尚未核实到** —— 不是"没有"。
-    R2 的处置见工单 05：拿不到就如实降级为"数据缺失"，不编一个链接出来。"""
+    """资源量 / 储量数字的**PDF 直链**。`None` 表示**尚未核实到** —— 不是"没有"。
+
+    这里存的是 URL，表本身登记在 `config/reports.py`（列序、单位、表头标记都在那儿）。
+    两处分开的理由：档案回答"这座矿该看哪份文件"，登记表回答"那份文件里的表长什么样"。
+    直链拿不到时如实降级为"数据缺失"，**不编一个链接出来**（R2 的处置见工单 05）。"""
 
     report_date: str | None = None
     standard: str | None = None
@@ -41,6 +45,16 @@ ARCHIVE: tuple[ArchiveEntry, ...] = (
         tickers=("ASX:PLS", "PLS"),
         aliases=("Pilbara", "Pilbara Minerals", "皮尔巴拉", "皮尔甘古拉", "Pilgangoora"),
         standard="JORC",
+        # R2 的处置（工单 05）：ASX 上的 2017 年版技术报告直链已失效（实测 404），
+        # 公司官网又整站在 Cloudflare 后面（实测 403）。**不编链接**，改用这份
+        # 公开可下载的 CET 演讲材料 —— 它第 36 页原样印着 "Mineral Resource as at
+        # 30 June 2022" 的 JORC 分类表，且该页脚注（3.5 Mt Li2O / 71 Mlb Ta2O5）
+        # 与表内数字自洽，可交叉核对。
+        #
+        # 性质必须说清楚：这是**公司自己的演讲材料转引年报**，不是独立技术报告。
+        # 已把这个出身写进 `config/reports.py` 的 title，它会随引用一起进产物 ——
+        # 读者看到的是这句话，而不是一个含糊的"技术报告"。
+        report_url=PILBARA_CET.pdf_url,
     ),
 )
 

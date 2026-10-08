@@ -55,3 +55,8 @@ desktop.ini
 # 不入库的理由：第三方版权文件，且体积大；可复现性靠 docs/risk-rules.md 里
 # 的 URL + sha256，不靠把 PDF 存进仓库。
 .scratch/jorc-src/
+
+# 工单 05 的临时区：技术报告 PDF 原件，以及 R2 那条失效直链回下来的 404 页面。
+# 不入库的理由与上面同：约 10–130 MB 的第三方版权文件。入库的是 `fixtures/resources/`
+# 里抽好的 JSON（含 sha256 与字节数，可追溯是哪一次下载），PDF 本身不入库（ADR-0001）。
+.scratch/pdf-src/

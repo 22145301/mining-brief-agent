@@ -1,0 +1,72 @@
+{
+  "pdf_url": "https://cet.edu.au/wp-content/uploads/Talk-6-Holmes_Pilgangoora-Exploration-Geology.pdf",
+  "pdf_sha256": "84ababf60f74335925572a870052a4367a194c23c819593b8c18cf7cc0fc9a80",
+  "pdf_bytes": 9747460,
+  "pdf_pages": 44,
+  "category_pages": [
+    3,
+    36,
+    37
+  ],
+  "page_text": {
+    "6": "6\nIntroduction \nPilgangoora Lithium-Tantalum Project\nOne of the few major hard-rock lithium projects in production globally\n• Pilgangoora is one of the largest spodumene-tantalite resources in \nthe world with a JORC Mineral Resource Estimate of 305M tonnes \ngrading 1.1% Li2O, 105 ppm Ta2O5 and 0.6% Fe2O3* \n• Pilgangoora is one of three major Western Australian hard-rock \nlithium deposits in production, together contributing to 42% of the \nworld’s lithium supply \n• The Project area comprises 34 granted tenements spanning 1086 sq\nkm in the highly prospective Turner River rare-metal pegmatite\nprovince in the East Pilbara.\n* Mineral Resource as at June 30, 2022, containing 3.5 M tonnes of Li2O and 71 M pounds of Ta2O5. A cut-off grade of 0.2% Li2O has been applied.",
+    "36": "36\nResources\nTonnes Li2O Ta2O5 Fe2O3 Li2O Ta2O5 \n(Mdmt ) (%) (ppm) (%) (Mt ) (Mlb)\nMeasured 19 1.4 138 0.5 0.3 6\nIndicated 187 1.2 100 0.6 2.2 41\nInferred 99 1.1 110 0.7 1.0 24\nTotal 305 1.1 105 0.6 3.5 71\nMineral Resource as at 30 June 2022\nCategory\n* Mineral Resource as at June 30, 2022, containing 3.5 M tonnes of Li2O and 71 M pounds of Ta2O5. A cut-off grade of 0.2% Li2O has been applied.\nOne of the largest hard rock lithium deposits in the world"
+  },
+  "project": "Pilgangoora",
+  "standard": "JORC",
+  "parsed_at": "2026-10-08T18:11:38.165457+00:00",
+  "human_verified": false,
+  "human_verified_by": null,
+  "human_verified_at": null,
+  "table": {
+    "pdf_url": "https://cet.edu.au/wp-content/uploads/Talk-6-Holmes_Pilgangoora-Exploration-Geology.pdf",
+    "report_title": "Pilgangoora Exploration Geology（CET 演讲材料，资源量引自 2022 年报）",
+    "report_date": "2022-06-30",
+    "standard": "JORC",
+    "project": "Pilgangoora",
+    "commodity": "lithium",
+    "rows": [
+      {
+        "category": "Measured",
+        "tonnage_mt": 19.0,
+        "grade": 1.4,
+        "grade_unit": "%",
+        "contained": 0.3
+      },
+      {
+        "category": "Indicated",
+        "tonnage_mt": 187.0,
+        "grade": 1.2,
+        "grade_unit": "%",
+        "contained": 2.2
+      },
+      {
+        "category": "Inferred",
+        "tonnage_mt": 99.0,
+        "grade": 1.1,
+        "grade_unit": "%",
+        "contained": 1.0
+      }
+    ],
+    "page_refs": [
+      {
+        "label": "Pilgangoora Exploration Geology（CET 演讲材料，资源量引自 2022 年报） · Measured 行",
+        "page": 36
+      },
+      {
+        "label": "Pilgangoora Exploration Geology（CET 演讲材料，资源量引自 2022 年报） · Indicated 行",
+        "page": 36
+      },
+      {
+        "label": "Pilgangoora Exploration Geology（CET 演讲材料，资源量引自 2022 年报） · Inferred 行",
+        "page": 36
+      },
+      {
+        "label": "Pilgangoora Exploration Geology（CET 演讲材料，资源量引自 2022 年报） · 表头（Mineral Resource as at）",
+        "page": 36
+      }
+    ]
+  },
+  "page_hint": 36,
+  "parsed_from_page": 36
+}

@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 
 from mining_brief.config.settings import Settings
+from mining_brief.datasources.fixtures import FixtureStore
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FIXTURE_ROOT = REPO_ROOT / "fixtures"
@@ -39,6 +40,23 @@ def llm_fixture_root() -> Path:
 def canonical_request() -> str:
     """题面原句（工单 01 的第一条验收）。"""
     return CANONICAL_REQUEST
+
+
+@pytest.fixture(scope="session")
+def fault_url(fixture_root: Path) -> str:
+    """`faults/` 组录下来的那条**真实** 503 的地址（A7 的样本）。
+
+    地址从**清单里**取，不在测试里再抄一遍 —— 两处各写一份就会漂。按**状态**挑而不是
+    按位置挑：`faults/` 下现在不止一个条目，靠顺序取是撞运气。
+    """
+    entries = [
+        entry
+        for entry in FixtureStore(fixture_root).manifest.entries
+        if entry.path.startswith("faults/")
+    ]
+    spiking = [entry for entry in entries if entry.status == 503]
+    assert len(spiking) == 1, f"faults 组里的 503 样本不是恰好一条：{entries}"
+    return spiking[0].url
 
 
 @pytest.fixture

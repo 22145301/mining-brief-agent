@@ -1,0 +1,71 @@
+{
+  "pdf_url": "https://www.pmet.ca/wp-content/uploads/2026/04/PMET_Site_Visit_September_2026_Final_to_lodge-1.pdf",
+  "pdf_sha256": "ffc6ca4351b9e9e430c68b73cc73f667523823bddf9eccbe8f4030440007da13",
+  "pdf_bytes": 5714740,
+  "pdf_pages": 48,
+  "category_pages": [
+    2,
+    3,
+    4,
+    5,
+    8,
+    26,
+    38,
+    41,
+    42,
+    44,
+    45,
+    46,
+    47,
+    48
+  ],
+  "page_text": {
+    "41": "TSX: PMET ASX: PMT OTCQX: PMETF WB: R9GA 41\nNI 43-101 Mineral Resource Statement\nCV5 AND CV13 PEGMATITES\nConceptual \nMining \nConstraint\nPegmatite Classification\nTonnes\n(t)\nLi2O\n(%)\nCs2O\n(%)\nTa2O5\n(ppm)\nGa \n(ppm)\nContained \nLCE\n(Mt)\nOpen-Pit 97,757,000 1.39 0.09 163 66 3.35\nUnderground 4,071,000 1.08 0.06 186 66 0.11\n101,828,000 1.38 0.09 164 66 3.46\nOpen-Pit 5,745,000 1.16 0.09 163 61 0.17\nUnderground 8,153,000 1.24 0.07 136 60 0.25\n13,898,000 1.21 0.08 147 60 0.41\nOpen-Pit 5,996,000 1.89 0.60 201 76 0.28\nUnderground 167,000 0.85 0.06 132 60 0.00\n6,163,000 1.86 0.59 199 76 0.28\nOpen-Pit 18,020,000 1.44 0.32 168 70 0.64\nUnderground 1,462,000 1.05 0.08 75 55 0.04\n19,482,000 1.41 0.30 161 69 0.68\nIndicated 107,991,000 1.40 0.11 166 66 3.75\nInferred 33,380,000 1.33 0.21 155 65 1.09\nTotal  \nCV5 + \nCV13\nCV13 Inferred\nCV5 Indicated\nCV5 Inferred\nCV13 Indicated\nTotal  \nTotal  \nTotal  \nCaesium Zone Classification\nTonnes\n(t)\nCs2O\n(%)\nLi2O\n(%)\nTa2O5\n(ppm)\nContained \nCs2O\n(t)\nIndicated 163,000 10.25 1.78 646 16,708\nInferred - - - - -\nIndicated 530,000 2.61 2.23 172 13,833\nInferred 1,698,000 2.40 1.81 245 40,752\nIndicated 693,000 4.40 2.12 283 30,541\nInferred 1,698,000 2.40 1.81 245 40,752\nVega\nRigel + Vega\nRigel\nConsolidated MRE Caesium Zone MRE\nThe Consolidated MRE cut-off grade is variable depending on the mining method and pegmatite (0.40% Li2O open-pit, 0.60% Li2O\nunderground CV5, and 0.70% Li2O underground CV13). A grade constraint of 0.50% Cs2O was used to model the Rigel and Vega\ncaesium zones, which are entirely within the CV13 Pegmatite’s open-pit mining shape. The Effective Date of the MREs is June 20,\n2025 (through drill hole CV24-787). Mineral Resources are not Mineral Reserves as they do not have demonstrated economic\nviability. Mineral Resources are inclusive of Mineral Reserves."
+  },
+  "project": "Shaakichiuwaanaan (CV5 + CV13)",
+  "standard": "NI 43-101",
+  "parsed_at": "2026-10-08T18:11:47.211115+00:00",
+  "human_verified": false,
+  "human_verified_by": null,
+  "human_verified_at": null,
+  "table": {
+    "pdf_url": "https://www.pmet.ca/wp-content/uploads/2026/04/PMET_Site_Visit_September_2026_Final_to_lodge-1.pdf",
+    "report_title": "PMET Resources Site Visit — NI 43-101 Mineral Resource Statement",
+    "report_date": "2025-06-20",
+    "standard": "NI 43-101",
+    "project": "Shaakichiuwaanaan (CV5 + CV13)",
+    "commodity": "lithium",
+    "rows": [
+      {
+        "category": "Indicated",
+        "tonnage_mt": 107.991,
+        "grade": 1.4,
+        "grade_unit": "%",
+        "contained": 3.75
+      },
+      {
+        "category": "Inferred",
+        "tonnage_mt": 33.38,
+        "grade": 1.33,
+        "grade_unit": "%",
+        "contained": 1.09
+      }
+    ],
+    "page_refs": [
+      {
+        "label": "PMET Resources Site Visit — NI 43-101 Mineral Resource Statement · Indicated 行",
+        "page": 41
+      },
+      {
+        "label": "PMET Resources Site Visit — NI 43-101 Mineral Resource Statement · Inferred 行",
+        "page": 41
+      },
+      {
+        "label": "PMET Resources Site Visit — NI 43-101 Mineral Resource Statement · 表头（NI 43-101 Mineral Resource Statement）",
+        "page": 41
+      }
+    ]
+  },
+  "page_hint": 41,
+  "parsed_from_page": 41
+}

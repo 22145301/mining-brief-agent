@@ -16,7 +16,7 @@ from mining_brief.datasources.fetchers import Fetcher, build_fetcher
 from mining_brief.datasources.fixtures import FixtureStore
 from mining_brief.datasources.news import NewsAdapter
 from mining_brief.datasources.prices import PriceAdapter
-from mining_brief.datasources.resources import ResourceAdapter
+from mining_brief.datasources.resources import ResourceAdapter, build_resource_source
 
 DEFAULT_FIXTURE_ROOT = Path("fixtures")
 
@@ -69,7 +69,15 @@ class Runtime:
         return PriceAdapter(self.fetcher())
 
     def resources(self) -> ResourceAdapter:
-        return ResourceAdapter(self.fetcher())
+        return ResourceAdapter(
+            build_resource_source(
+                data_mode=self.settings.data_mode,
+                fetcher=self.fetcher(),
+                # 冻结的抽取结果放在 fixture 根下的 resources/ 里，与别的数据分开：
+                # 它们不是"某个 URL 的原文"，而是**解析器的输出**（见 resources.py）。
+                resource_dir=self.fixture_root / "resources",
+            )
+        )
 
 
 @lru_cache(maxsize=1)

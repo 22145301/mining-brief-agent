@@ -227,17 +227,8 @@ class _RuntimeWithARealOutage(Runtime):
         )
 
 
-def _fault_url(fixture_root: Path) -> str:
-    """故障样本的地址从**清单里**取，不在测试里再抄一遍 —— 两处各写一份就会漂。"""
-    entry = next(
-        e for e in FixtureStore(fixture_root).manifest.entries if e.path.startswith("faults/")
-    )
-    assert entry.status == 503, "faults 组录下来的必须真的是一个 503"
-    return entry.url
-
-
 async def test_a_real_upstream_503_degrades_instead_of_pretending(
-    settings: Settings, fixture_root: Path, monkeypatch: pytest.MonkeyPatch
+    settings: Settings, fault_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """上游回 503 时给**降级信封**，而不是"未找到"，更不是 0。
 
@@ -247,7 +238,7 @@ async def test_a_real_upstream_503_degrades_instead_of_pretending(
     monkeypatch.setattr(
         price_server,
         "_runtime_override",
-        _RuntimeWithARealOutage(settings, _fault_url(fixture_root)),
+        _RuntimeWithARealOutage(settings, fault_url),
     )
 
     lookup = await default_toolkit().get_price("iron_ore", LAST_SESSION)
