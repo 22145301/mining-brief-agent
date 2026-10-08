@@ -128,3 +128,26 @@ $ uv run pytest -q -m stdio      → 9 passed, 236 deselected, 4 warnings in 18.
   留占位，README 里写明这是**全仓库唯一需要替换的地方**、何时替换。
 - **Docker 通道只验到 Windows + Docker Desktop**（engine 29.7.2 / compose v5.5.1）。
   Linux 上按理一致（基础镜像是 debian slim），但没有第二台机器可验。
+
+### 收尾时又改了两处（都写在这里，别让它们藏在 diff 里）
+
+1. **补交：`RUN.md` 里"换个问题问"的例子换成已录播的样例句**（见上「三处判断」第 2 条）。
+2. **产物换行符钉死成 LF**（`render.py` 的 `newline="\n"`）。这是补 03/04 两票那半格时
+   顺手撞出来的：同一句请求在本机落出 4850 B / CRLF，在容器里落出 4720 B / LF，而
+   README 与 RUN.md 都写着"本地跑与容器跑逐字节相同"——**那句话在 Windows 上是假的**。
+   改完后两句请求（Pilbara / 整档案）本地与容器都同哈希：`0928bd75d0d1056e…` 与
+   `880fb7af67314cca…`。`fixtures/**` 不动（`.gitattributes` 里 `-text` 是 ADR-0002 要求的
+   逐字节原样往返，换行符不该由我们替它决定）。
+3. **README 的"离线可问"从三条改成四条**：补录了整档案那一句（真实 DeepSeek 调用），
+   它现在是 RUN.md 里第一个推荐的"换个问题问"，因为一句就能看到锂/铜/铁矿石三行价格
+   各带自己的数据时点 —— 那是这份产物最该被检验的地方。
+
+### 收尾时的全量闸门（与 CI 四条 + stdio 一致）
+
+```
+$ uv run ruff check .            → All checks passed!
+$ uv run ruff format --check .   → 66 files already formatted
+$ uv run mypy                    → Success: no issues found in 63 source files
+$ uv run pytest -q               → 235 passed, 11 deselected, 4 warnings in 18.13s
+$ uv run pytest -q -m stdio      → 9 passed, 237 deselected, 4 warnings in 17.89s
+```
