@@ -2,13 +2,14 @@
 
 这一组之所以要单独存在，是因为它覆盖的那条路径**从端到端跑不到**：
 `ReportScope.commodity_in_scope` 是从 `config/archive.py` 推出来的，而档案里
-只有 Pilgangoora 一条（锂）。也就是说，铁矿石即使在 `PRICE_SOURCES` 里登记好了、
-工具也真能取到数，它也永远进不了范围 —— 于是「两个品种同时出现在第四节」这件事
-在 S1 上无法被观测。
+只有 Pilgangoora 一条（锂）。也就是说，铁矿石与铜即使在 `PRICE_SOURCES` 里登记好了、
+工具也真能取到数，它们也永远进不了范围 —— 于是「三个品种同时出现在第四节」这件事
+在本票的产物里无法被观测。这条缺口由工单 06（把档案补齐到 8 座矿山）打开，不是
+04 的代码问题：`fetch_prices` 本来就是按 `scope.commodity_in_scope` 循环的。
 
-工单 03 的验收里有一条正是关于这个的（"两项的截止时间…互不相同"）。既然端到端
-到不了，就把规则拿到单元层面钉住，并在工单与交接报告里写明这条链路为什么跑不到 ——
-**不假装它跑到了**。
+工单 03 / 04 的验收里各有一条正是关于这个的（"两项的截止时间…互不相同"、"三项…
+截止时间各不相同"）。既然端到端到不了，就把规则拿到单元层面钉住，并在工单与交接
+报告里写明这条链路为什么跑不到 —— **不假装它跑到了**。
 """
 
 from __future__ import annotations
@@ -146,10 +147,17 @@ def test_a_commodity_with_no_data_says_so_in_the_note_rather_than_as_a_zero() ->
                 "copper": PriceSeries(
                     status="degraded",
                     source_status=FetchStatus.UNAVAILABLE,
-                    reason="LME 需要无头浏览器（工单 04），本次尚未接入。",
+                    # 用**真实**那条说明（prices.py 的 lme_hero 分支），不是随手编一句：
+                    # 铜已经接入了，它取不到数的真实原因不是"尚未接入"，而是行情页
+                    # 只能给最新一天。测试夹具里留一句过时的理由，等于把这个系统
+                    # 说成另一个样子。
+                    reason=(
+                        "LME 的行情页只提供最新的 3 个月收盘价，"
+                        "给不出 2026-09-15 这一天 —— 该源不支持历史查询。"
+                    ),
                     retrieved_at=NOW,
                     commodity="copper",
-                    exchange="",
+                    exchange="LME",
                     requested_days=7,
                     points=(),
                 ),
@@ -162,7 +170,7 @@ def test_a_commodity_with_no_data_says_so_in_the_note_rather_than_as_a_zero() ->
     assert section.facts[0].text.startswith("锂")
     assert section.note is not None
     assert "铜" in section.note
-    assert "尚未接入" in section.note
+    assert "不支持历史查询" in section.note
 
 
 def test_the_fallback_qualifier_is_printed_only_when_the_value_really_was_fell_back() -> None:
@@ -220,3 +228,40 @@ def test_the_delayed_qualifier_tracks_the_source_not_the_fallback(delayed: bool)
     assert ("延迟披露" in text) is delayed
     assert ("当日" in text) is not delayed
     assert "回退自" not in text, "这一组没有回退，不该出现回退字样"
+
+
+def test_a_delayed_commodity_that_also_fell_back_prints_both_qualifiers() -> None:
+    """铜这一行在产物里的真实样子：**两个限定词同时出现**，因为它们同时成立。
+
+    这是 ADR-0004 那条分界在纸面上的样子：`延迟披露` 说的是**数据源**（LME 的行情页
+    自己写着 day-delayed），`回退自 2026-10-06` 说的是**我们这一次的动作**（问了 10-06，
+    页面只给到 10-05）。把两者压成一个字段，这一行就只能印出一个 —— 而无论印哪个，
+    读者都会得到一个错误印象：印"延迟披露"会让人以为数据是 10-06 的（其实是 10-05），
+    印"回退自"会让人以为换一家源就能拿到 10-06 的（LME 就是延迟的）。
+    """
+    ledger = CitationLedger()
+    section = _prices_section(
+        {
+            "prices": {
+                "copper": _series(
+                    "copper",
+                    "LME",
+                    "CA 3-month",
+                    ("2026-10-05", 14415.0),
+                    delayed=True,
+                    # 问的是 10-06，页面只给到 10-05。
+                    last_requested_date="2026-10-06",
+                )
+            }
+        },
+        ledger,
+    )
+
+    text = section.facts[0].text
+    assert "14415.0" in text
+    assert "LME CA 3-month" in text
+    assert "2026-10-05" in text, "数据本身的日期"
+    assert "延迟披露" in text, "数据源固有的延迟"
+    assert "回退自 2026-10-06" in text, "我们这一次往前找了一天"
+    assert "当日" not in text, "延迟与非延迟是互斥的两种说法，不能同时印出来"
+    assert section.as_of == "2026-10-05"

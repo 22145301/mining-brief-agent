@@ -79,6 +79,11 @@ class Settings:
     user_agent: str
     http_timeout_s: float
     browser_timeout_s: float
+    browser_channel: str
+    """浏览器走哪个 channel：空 = playwright 自带的 chromium（要 `playwright install
+    chromium`）；`chrome` = 用系统装的 Chrome（省一次下载）。它进配置是因为
+    "这台机器上能起来的浏览器是哪个"是**环境事实**，不该写死在抓取代码里。"""
+
     output_dir: str
     """日报落盘的目录（PRD §5.3）。默认 `briefs/`，可用 `MINING_OUTPUT_DIR` 覆盖。
     放配置里而不是写死，是为了让测试能写进 `tmp_path` 而不是污染工作区。"""
@@ -101,6 +106,7 @@ class Settings:
             user_agent=_read_str("MINING_USER_AGENT", "mining-brief/0.1 (+contact@example.com)"),
             http_timeout_s=_read_float("MINING_HTTP_TIMEOUT", DEFAULT_HTTP_TIMEOUT_S),
             browser_timeout_s=_read_float("MINING_BROWSER_TIMEOUT", DEFAULT_BROWSER_TIMEOUT_S),
+            browser_channel=_read_str("MINING_BROWSER_CHANNEL"),
             output_dir=_read_str("MINING_OUTPUT_DIR", "briefs"),
             fetch_attempts=_read_int("MINING_FETCH_ATTEMPTS", DEFAULT_FETCH_ATTEMPTS),
             retry_base_delay_s=_read_float("MINING_RETRY_BASE_DELAY", DEFAULT_RETRY_BASE_DELAY_S),

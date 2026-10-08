@@ -4,8 +4,8 @@
 里的逐字节原始响应直接就能单测 —— 不需要网络、不需要 mock。抓到网络的那一段
 全在 `Fetcher` 里，所以本模块**不出现任何模式判断**（没有 `if replay`）。
 
-三条链路：锂走 GFEX 官方日行情、铁矿石走新浪转载的 DCE 日 K 线，见本票；
-铜走 LME（无头浏览器）见工单 04，此前如实返回"未接入"。
+三条链路：锂走 GFEX 官方日行情、铁矿石走新浪转载的 DCE 日 K 线、铜走 LME 的行情页
+（三个里**唯一**需要无头浏览器的一个 —— 它整站挂 Cloudflare，见工单 04）。
 
 三个容易混的语义在这里各就各位（ADR-0004）：
 
@@ -20,19 +20,20 @@ from __future__ import annotations
 import json
 from datetime import date as _date
 from datetime import datetime, timedelta
+from html.parser import HTMLParser
 from zoneinfo import ZoneInfo
 
 from mining_brief.config.sources import PRICE_SOURCES, PriceSource
 from mining_brief.contracts import FetchStatus, PriceLookup, PricePoint, PriceSeries, RawResponse
 from mining_brief.datasources.fetchers import Fetcher
-from mining_brief.errors import ReplayMiss
+from mining_brief.errors import LoudFailure
 
 SUPPORTED_COMMODITIES: tuple[str, ...] = ("lithium", "copper", "iron_ore")
 
 #: 哪些品种还没接线，以及为什么。简报第 6 节会原样呈现这句话。
-_PENDING: dict[str, str] = {
-    "copper": "铜价走 LME 的延迟披露数据，需要无头浏览器（工单 04），本次尚未接入。",
-}
+#: 三个品种都接上了之后这里是空的 —— 保留这张表是因为"未接入"仍是一条**合法的
+#: 输出**（比如将来加了品种但源还没定），而不是失败。
+_PENDING: dict[str, str] = {}
 
 #: 回退时最多往前找几个日历日。
 #:
@@ -159,6 +160,98 @@ def parse_sina_kline(raw: RawResponse, source: PriceSource) -> tuple[PricePoint,
 
 
 # ---------------------------------------------------------------------------
+# LME：页面渲染后的 DOM（工单 04）
+# ---------------------------------------------------------------------------
+
+
+class _LmeHeroPage(HTMLParser):
+    """从 LME 行情页里取两样东西，别的一律不碰。
+
+    1. `span.hero-metal-data__number` 里的数字 —— 就是"3-month Closing Price
+       (day-delayed)"那个数。
+    2. **页面自报的最新营业日**：数据集日期选择器（"Please select a business date
+       in the last month"）那个 `input[type=date]` 的 `max` 属性。
+
+    为什么要有第二样：**hero 数字本身不带日期**。硬编一个"昨天"或者拿系统时钟
+    减去一天，都是在**替数据源断言**一个它没说的日子 —— 而这份页面的日期选择器
+    上界（录播里是 `2026-10-05`）说明它当时给到的最新营业日就停在那儿，比"今天
+    减一天"早了三天。宁可如实记页面说的那个日子。
+
+    用 HTMLParser 而不是正则：属性顺序、空白、嵌套都不影响结果，而 LME 的前端
+    是 Vue 渲染的，改版是常态。
+    """
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.hero_number: str | None = None
+        self.latest_business_date: str | None = None
+        self._in_hero = False
+        self._saw_datepicker = False
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attributes = dict(attrs)
+        classes = attributes.get("class") or ""
+        if tag == "span" and "hero-metal-data__number" in classes:
+            self._in_hero = True
+        if "data-component-datepicker" in classes:
+            self._saw_datepicker = True
+        if (
+            tag == "input"
+            and self._saw_datepicker
+            and attributes.get("type") == "date"
+            and self.latest_business_date is None
+            and attributes.get("max")
+        ):
+            self.latest_business_date = str(attributes["max"])
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "span" and self._in_hero:
+            self._in_hero = False
+
+    def handle_data(self, data: str) -> None:
+        if self._in_hero and self.hero_number is None and data.strip():
+            self.hero_number = data.strip()
+
+
+def parse_lme_hero(raw: RawResponse, source: PriceSource) -> PricePoint:
+    """LME 行情页 → 一个价格点。**纯函数**，拿录播的 HTML 直接就能单测。
+
+    页面上写着 "3-month Closing Price (day-delayed)"，所以这个点 `delayed=True`
+    —— 那是**数据源固有**的延迟，不是"我们回退了"（ADR-0004）。
+
+    **读不出数字就抛，不给默认值。** 页面改版时"抛"是唯一安全的动作：猜一个数，
+    日报就会印出一个看起来完全正常的错价格，而那是这个项目最贵的一类 bug。
+    """
+    page = _LmeHeroPage()
+    page.feed(raw.text())
+
+    if not page.hero_number:
+        raise ValueError(
+            f"{source.exchange} 行情页里找不到 span.hero-metal-data__number —— "
+            "页面结构可能变了（见 fixtures/prices/copper-lme-hero.html）。"
+        )
+    if not page.latest_business_date:
+        raise ValueError(
+            f"{source.exchange} 行情页里找不到数据集的最新营业日（日期选择器的 max）—— "
+            "没有它就等于替数据源编一个日期，宁可炸。"
+        )
+
+    return PricePoint(
+        commodity=source.commodity,
+        exchange=source.exchange,
+        symbol=f"{source.symbol} 3-month",
+        value=float(page.hero_number.replace(",", "")),
+        currency=source.currency,
+        unit=source.unit,
+        as_of=page.latest_business_date,
+        delayed=source.delayed,
+        source_url=source.page_url,
+        # 由调用方（get_price）补上被问的那一天 —— 这里不知道它。
+        requested_date=page.latest_business_date,
+    )
+
+
+# ---------------------------------------------------------------------------
 # adapter：只做编排
 # ---------------------------------------------------------------------------
 
@@ -241,6 +334,22 @@ class PriceAdapter:
                 if point.as_of <= requested.isoformat()
             ]
             return (earlier[-1] if earlier else None), None
+
+        if source.quote_format == "lme_hero":
+            raw = await self._fetch(source, None)
+            if isinstance(raw, str):
+                return None, raw
+            if not raw.ok:
+                return None, f"{source.exchange} 行情页返回 HTTP {raw.status}，本次未能取到数据。"
+            hero = parse_lme_hero(raw, source)
+            if hero.as_of > requested.isoformat():
+                # 页面只给**最新**那一天的数。问一个更早的日子，它答不了 ——
+                # 把最新价当成"那一天的价"回出去，就是拿未来答过去。
+                return None, (
+                    f"{source.exchange} 的行情页只提供最新的 3 个月收盘价，"
+                    f"给不出 {requested.isoformat()} 这一天 —— 该源不支持历史查询。"
+                )
+            return hero, None
 
         for day in candidate_dates(requested, self._lookback_days):
             stamp = day.strftime("%Y%m%d")
@@ -336,6 +445,16 @@ class PriceAdapter:
                 return (), f"{source.exchange} 行情接口返回 HTTP {raw.status}，本次未能取到数据。"
             return parse_sina_kline(raw, source), None
 
+        if source.quote_format == "lme_hero":
+            # 页面只有**一个**数，所以"走势"最多就是一个点。它照样是诚实的：
+            # 窗口过滤（get_trend 里）会把窗口外的那一点滤掉，剩下空序列 + 说明。
+            raw = await self._fetch(source, None)
+            if isinstance(raw, str):
+                return (), raw
+            if not raw.ok:
+                return (), f"{source.exchange} 行情页返回 HTTP {raw.status}，本次未能取到数据。"
+            return (parse_lme_hero(raw, source),), None
+
         points: list[PricePoint] = []
         for day in reversed(candidates):  # 由旧到新，结果天然是升序
             raw = await self._fetch(source, day.strftime("%Y%m%d"))
@@ -357,9 +476,10 @@ class PriceAdapter:
                     {"trade_date": trade_date, "trade_type": "0", "variety": source.symbol},
                 )
             return await self._fetcher.fetch(source.quote_url)
-        except ReplayMiss:
-            # 录播缺失不是"这个源挂了"，是"我们的 fixture 集不全"。降级成"数据缺失"
-            # 会让人去查一个根本没坏的交易所 —— 让它炸穿（ADR-0002）。
+        except LoudFailure:
+            # 录播缺失是"我们的 fixture 集不全"，缺无头浏览器是"我们的环境不对"——
+            # 两者都不是"这个源挂了"。降级成"数据缺失"会让人去查一个根本没坏的
+            # 交易所（ADR-0002 / 工单 04 验收第 5 条）。让它炸穿。
             raise
         except Exception as exc:
             return f"{source.exchange} 行情接口取数失败：{type(exc).__name__}"

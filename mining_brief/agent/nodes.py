@@ -54,7 +54,7 @@ from mining_brief.contracts import (
     Slots,
     Uncovered,
 )
-from mining_brief.errors import ReplayMiss
+from mining_brief.errors import LoudFailure
 
 log = get_logger(__name__)
 
@@ -395,8 +395,10 @@ async def fetch_news(state: BriefState) -> dict[str, Any]:
             label="news",
             on_retry=_retry_logger("news"),
         )
-    except ReplayMiss:
-        raise  # 录播缺失不是"取不到"，是"我们的录播集不全" —— 不许降级，见 errors.py
+    except LoudFailure:
+        # 录播缺失、缺无头浏览器都不是"取不到"，是"我们自己这边不对" ——
+        # 不许降级成"数据缺失"（见 errors.py 的 LoudFailure）。
+        raise
     except Exception as exc:
         log.warning("fetch.news.failed", error=str(exc))
         return {"news": _failed_news(state, f"新闻工具链路失效：{type(exc).__name__}")}
@@ -434,7 +436,7 @@ async def fetch_prices(state: BriefState) -> dict[str, Any]:
                 label=f"prices:{commodity}",
                 on_retry=_retry_logger(f"prices:{commodity}"),
             )
-        except ReplayMiss:
+        except LoudFailure:
             raise
         except Exception as exc:
             log.warning("fetch.prices.failed", commodity=commodity, error=str(exc))
@@ -480,7 +482,7 @@ async def fetch_resources(state: BriefState) -> dict[str, Any]:
             label="resources",
             on_retry=_retry_logger("resources"),
         )
-    except ReplayMiss:
+    except LoudFailure:
         raise
     except Exception as exc:
         log.warning("fetch.resources.failed", error=str(exc))

@@ -46,13 +46,14 @@ uv run pytest                                                 # 测（默认离�
 | 新闻 | mining.com RSS、Australian Mining RSS + 文章页 | 直取（mining.com 本机需走代理，否则 CloudFront 403） |
 | 锂价 | GFEX 广期所官方日行情（POST 表单，按日索取） | **已接入**，主力合约取持仓量最大者 |
 | 铁矿石价 | 新浪财经转载的 DCE `i` 合约日 K 线（GET，含全史） | **已接入**，见下方"为什么不是 DCE 官网" |
-| 铜价 | LME 官网 | 未接入（需无头浏览器，工单 04）；当前如实返回"尚未接入" |
+| 铜价 | LME 官网行情页（3 个月收盘价） | **已接入**（走**无头浏览器**，见下）；数据源固有 "day-delayed"，如实标注 |
 | 储量 | 各公司公开技术报告 PDF | 已登记 PDF 解析路径；Pilbara 的技术报告直链尚未核实到，故如实返回"数据缺失" |
 
 **拿不到的，写在这里，不装：**
 
 - **Platts IODEX / Mysteel / SMM / Fastmarkets**（铁矿石与锂的行业标准价）**全部付费墙**。
-- **LME 实时价 / API 需机构注册**，只能用官网延迟收盘价。
+- **LME 实时价 / API 需机构注册**，只能用官网延迟收盘价 —— 且该行情页**只给最新一天**，
+  问更早的日子它会如实回一句"该源不支持历史查询"，而不是拿最新价冒充那天的价。
 - **SHFE 沪铜**是更即时的替代，但 `lme-price` 这个 server 名是题面定的，故铜主用 LME，SHFE 记入 ADR 作备选。
 - **铁矿石**这一档标的是"知难而选的妥协项"：主流铁矿公司（BHP / Rio / Vale）走 20-F、不出具 NI 43-101，Fortescue 是例外。它和铜、锂**不是同等质量的数据**。
 
@@ -73,6 +74,29 @@ uv run pytest                                                 # 测（默认离�
 两边逐项相同，说明解析层没有读错（该断言在 `tests/test_price_parsers.py`）。
 报价单位两边都是**元/吨**；引用块里 `publisher` 记的是数据的**发布方**（新浪财经），
 不是合约所属的交易所。
+
+#### 为什么铜价要无头浏览器（实测）
+
+LME 官网整站挂在 Cloudflare 后面：`httpx`、`urllib`、`curl` 直取**一律 403**，
+带正常的浏览器 UA 也一样。只有**真实页面导航**能过 —— `https://www.lme.com/en/metals/non-ferrous/lme-copper`
+用 Playwright 起真 Chrome 才拿到 200。所以铜是登记表里**唯一** `requires_browser=True`
+的源，也是唯一走 `BrowserFetcher` 的路径。
+
+两件事值得单独说：
+
+1. **延迟 ≠ 回退。** 页面上写着 "3-month Closing Price **(day-delayed)**"，所以铜的
+   `delayed` 恒为 `true` —— 那是**数据源固有**的披露延迟。而"回退"是 `as_of < requested_date`，
+   是**我们**往前找了更早的一天。两者可以同时真、也可以一真一假，所以它们是两件事、
+   两个字段，测试里**分别断言**（见 [ADR-0004](docs/adr/0004-price-adapter-falls-back-and-splits-dates.md)）。
+2. **日期取自页面，不取自我们的时钟。** hero 数字本身不带日期，我们读的是页面自己的
+   数据集日期选择器的上界（录播里是 `2026-10-05`，比"今天减一天"早三天）。替数据源
+   断言一个它没说的日子，是本项目最贵的一类错；读不出日期时解析器**抛异常**，不给默认值。
+
+跑真实抓取（`--live`）需要：`uv sync --all-extras`（装 playwright）+ 一个能起来的浏览器。
+本机实测 playwright 自带的 chromium 没装、系统 Chrome 在，所以本仓库的配置是
+`MINING_BROWSER_CHANNEL=chrome`；也可以改成 `uv run playwright install chromium` 后用自带的。
+**缺浏览器时它响亮报错、绝不降级成"LME 无数据"** —— 静默降级会把我们的环境问题
+写成数据源的结论，把排查引向一个根本没坏的网站。
 
 ### 术语声明
 

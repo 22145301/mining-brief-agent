@@ -59,7 +59,7 @@
       "url": "https://httpbin.org/status/503",
       "path": "faults/upstream-503.html",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "fetched_at": "2026-10-08T17:35:41.999446+00:00",
+      "fetched_at": "2026-10-08T18:00:02.809894+00:00",
       "content_type": "text/html; charset=utf-8",
       "status": 503,
       "bytes": 0
@@ -135,6 +135,24 @@
       "content_type": "text/html; charset=UTF-8",
       "status": 200,
       "bytes": 246720
+    },
+    {
+      "url": "https://www.lme.com/en/metals/non-ferrous/lme-aluminium",
+      "path": "faults/lme-blocked.html",
+      "sha256": "42cf94fcc74d5b72549dd33616a8f41b84e5c242f8371ca84990be21bcf2de09",
+      "fetched_at": "2026-10-08T18:00:04.134828+00:00",
+      "content_type": "text/html; charset=UTF-8",
+      "status": 403,
+      "bytes": 5656
+    },
+    {
+      "url": "https://www.lme.com/en/metals/non-ferrous/lme-copper",
+      "path": "prices/copper-lme-hero.html",
+      "sha256": "6b2cdd6810eda6eb0e6507d6dfff6b265edb2812beb3e92b9a5e370fb3abc289",
+      "fetched_at": "2026-10-08T17:59:50.202318+00:00",
+      "content_type": "text/html; charset=utf-8",
+      "status": 200,
+      "bytes": 289106
     },
     {
       "url": "https://www.mining.com/feed/",

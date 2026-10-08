@@ -27,7 +27,7 @@ from mining_brief.contracts import (
     RawResponse,
 )
 from mining_brief.datasources.fetchers import Fetcher
-from mining_brief.errors import ReplayMiss
+from mining_brief.errors import LoudFailure
 
 #: 参与关键词匹配的最小词长。太短的词（`pls`、`ltd`）做子串匹配会把不相关的
 #: 新闻全捞进来，得不偿失。
@@ -209,9 +209,10 @@ class NewsAdapter:
         for source in self._sources:
             try:
                 raw = await self._fetcher.fetch(source.url)
-            except ReplayMiss:
-                # 录播缺失不是"这个源挂了"，是"我们的 fixture 集不全"。降级成
-                # PARTIAL 会让人去查一个根本没坏的网站 —— 让它炸穿（ADR-0002）。
+            except LoudFailure:
+                # 录播缺失不是"这个源挂了"，是"我们的 fixture 集不全"；缺浏览器同理，
+                # 是环境问题不是源问题。降级成 PARTIAL 会让人去查一个根本没坏的网站
+                # —— 让它炸穿（ADR-0002）。
                 raise
             except Exception as exc:
                 failures.append(f"{source.name}（{type(exc).__name__}）")
@@ -239,7 +240,7 @@ class NewsAdapter:
     async def fetch_article(self, url: str, now: datetime) -> ArticleLookup:
         try:
             raw = await self._fetcher.fetch(url)
-        except ReplayMiss:
+        except LoudFailure:
             raise
         except Exception as exc:
             return ArticleLookup(

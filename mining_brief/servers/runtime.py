@@ -11,6 +11,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from mining_brief.config.settings import Settings
+from mining_brief.config.sources import browser_urls
 from mining_brief.datasources.fetchers import Fetcher, build_fetcher
 from mining_brief.datasources.fixtures import FixtureStore
 from mining_brief.datasources.news import NewsAdapter
@@ -53,8 +54,12 @@ class Runtime:
             data_mode=self.settings.data_mode,
             fixture_root=self.fixture_root,
             timeout_s=self.settings.http_timeout_s,
+            browser_timeout_s=self.settings.browser_timeout_s,
             user_agent=self.settings.user_agent,
             proxy=self.settings.http_proxy,
+            # 哪些源要浏览器，由登记表推出 —— 组装点只负责把它传下去，不判断谁是谁。
+            browser_urls=browser_urls(),
+            browser_channel=self.settings.browser_channel,
         )
 
     def news(self) -> NewsAdapter:

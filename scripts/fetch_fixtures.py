@@ -51,7 +51,7 @@ from mining_brief.config.sources import (  # noqa: E402
     SINA_KLINE_URL,
 )
 from mining_brief.contracts import DEFAULT_WINDOW_DAYS, RawResponse  # noqa: E402
-from mining_brief.datasources.fetchers import canonical_post_url  # noqa: E402
+from mining_brief.datasources.fetchers import BrowserFetcher, canonical_post_url  # noqa: E402
 from mining_brief.datasources.news import parse_feed  # noqa: E402
 from mining_brief.datasources.prices import candidate_dates  # noqa: E402
 
@@ -67,6 +67,14 @@ _SHANGHAI = ZoneInfo("Asia/Shanghai")
 #: 而且会污染"清单 = 真实抓取记录"这个前提。httpbin 的这个端点专门用来按需回
 #: 503，于是它被当成一个普通的数据源抓了一次，走的是同一条代码路径。
 FAULT_SAMPLE_URL = "https://httpbin.org/status/503"
+
+#: `faults` 组的第二个条目：**同一站**的另一个页面被 Cloudflare 挡下来的原始响应。
+#:
+#: 为什么要另找一个 URL 而不是复用铜的行情页：fixture 清单是按 URL 索引的，
+#: 一个 URL 只能有一条录播 —— 铜的 URL 已经被"浏览器抓到的正常页面"占了。
+#: 用同站另一个页面，考的是同一件事（LME 对**没有浏览器**的客户端一律 403），
+#: 而且它是一份**真的** 403 响应，不是手写的。
+LME_BLOCKED_SAMPLE_URL = "https://www.lme.com/en/metals/non-ferrous/lme-aluminium"
 
 #: 碳酸锂的第三方转载日线（新浪的"主力连续"），**只用于交叉核对**。
 #: 用 `SINA_KLINE_URL` 拼出来而不是手写一遍，免得两边哪天不一致。
@@ -86,6 +94,10 @@ class PlannedSource:
 
     allow_failure: bool = False
     """`faults` 组专用：非 200 照存。别的组一律非 200 即失败退出。"""
+
+    via_browser: bool = False
+    """这份录播要用**无头浏览器**抓（页面是 JavaScript 渲染的 / 要过 Cloudflare）。
+    它来自登记表的 `requires_browser`，不是在这里另判一次。"""
 
     @property
     def is_post(self) -> bool:
@@ -154,6 +166,18 @@ def _price_plan() -> list[PlannedSource]:
     today = replay_now().astimezone(_SHANGHAI).date()
     planned: list[PlannedSource] = []
     for source in PRICE_SOURCES.values():
+        if source.requires_browser:
+            planned.append(
+                PlannedSource(
+                    # 单独一组：它要浏览器、要网络，而别的 prices 源两样都不要 ——
+                    # 补录这一份时不该顺带把 GFEX 的行情全部重抓一遍。
+                    "lme",
+                    source.quote_url,
+                    f"prices/{source.commodity}-lme-hero.html",
+                    via_browser=True,
+                )
+            )
+            continue
         if source.quote_format != "gfex_daily":
             planned.append(
                 PlannedSource(
@@ -197,31 +221,59 @@ def plan(group_filter: str | None) -> list[PlannedSource]:
     planned.append(
         PlannedSource("faults", FAULT_SAMPLE_URL, "faults/upstream-503.html", allow_failure=True)
     )
+    planned.append(
+        PlannedSource(
+            "faults",
+            LME_BLOCKED_SAMPLE_URL,
+            "faults/lme-blocked.html",
+            allow_failure=True,
+        )
+    )
     if group_filter:
         planned = [p for p in planned if p.group == group_filter]
     return planned
 
 
-async def fetch_one(client: httpx.AsyncClient, source: PlannedSource) -> dict[str, object]:
-    if source.is_post:
-        response = await client.post(source.url, data=dict(source.form))
+async def fetch_one(
+    client: httpx.AsyncClient,
+    source: PlannedSource,
+    browser: BrowserFetcher | None = None,
+) -> dict[str, object]:
+    """抓一份。返回写进清单的那条记录。
+
+    浏览器源与 HTTP 源在这一层合流：两边都交出一个 `RawResponse`，之后写盘、
+    算 sha256、记状态码的代码**只有一份**。这也是 ADR-0003 想要的形状 ——
+    "怎么取"分两种，"取到之后怎么存"只有一种。
+    """
+    if source.via_browser:
+        if browser is None:
+            raise RuntimeError(f"{source.url} 需要无头浏览器，但没装配 BrowserFetcher")
+        raw = await browser.fetch(source.url)
+        body, status_code, content_type = raw.body, raw.status, raw.content_type
     else:
-        response = await client.get(source.url)
-    if response.status_code != 200 and not source.allow_failure:
-        raise RuntimeError(f"{source.url} 返回 {response.status_code}，不写进 fixture")
+        response = (
+            await client.post(source.url, data=dict(source.form))
+            if source.is_post
+            else (await client.get(source.url))
+        )
+        body, status_code = response.content, response.status_code
+        content_type = response.headers.get("content-type", "")
+
+    if status_code != 200 and not source.allow_failure:
+        raise RuntimeError(f"{source.url} 返回 {status_code}，不写进 fixture")
 
     target = FIXTURE_DIR / source.rel_path
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(response.content)
+    target.write_bytes(body)
 
     return {
         "url": source.key,
         "path": source.rel_path,
-        "sha256": hashlib.sha256(response.content).hexdigest(),
+        "sha256": hashlib.sha256(body).hexdigest(),
         "fetched_at": datetime.now(UTC).isoformat(),
-        "content_type": response.headers.get("content-type", ""),
-        "status": response.status_code,
-        "bytes": len(response.content),
+        "content_type": content_type,
+        "status": status_code,
+        "bytes": len(body),
     }
 
 
@@ -290,6 +342,17 @@ async def run(args: argparse.Namespace) -> int:
         sys.stderr.write(f"没有匹配的源（--only {args.only}）\n")
         return 2
 
+    browser = (
+        BrowserFetcher(
+            timeout_s=args.browser_timeout,
+            user_agent=args.user_agent,
+            proxy=args.proxy,
+            channel=args.browser_channel,
+        )
+        if any(source.via_browser for source in planned)
+        else None
+    )
+
     async with httpx.AsyncClient(
         timeout=args.timeout,
         follow_redirects=True,
@@ -300,7 +363,7 @@ async def run(args: argparse.Namespace) -> int:
         for index, source in enumerate(planned):
             if index and args.throttle:
                 await asyncio.sleep(args.throttle)
-            entry = await fetch_one(client, source)
+            entry = await fetch_one(client, source, browser)
             status = entry["status"]
             flag = "" if status == 200 else f" [HTTP {status}]"
             sys.stdout.write(
@@ -317,7 +380,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--only",
-        choices=["news", "articles", "prices", "corroboration", "faults"],
+        choices=["news", "articles", "prices", "lme", "corroboration", "faults"],
         default=None,
         help="只抓某一组源",
     )
@@ -335,6 +398,17 @@ def main() -> int:
     )
     parser.add_argument("--proxy", default="", help="如 http://127.0.0.1:7897")
     parser.add_argument("--timeout", type=float, default=45.0)
+    parser.add_argument(
+        "--browser-timeout",
+        type=float,
+        default=45.0,
+        help="浏览器导航的超时秒数。与 HTTP 的 --timeout 分开：冷启动 + 过挑战页更慢。",
+    )
+    parser.add_argument(
+        "--browser-channel",
+        default="",
+        help="空 = playwright 自带 chromium；chrome = 用系统 Chrome（省一次下载）。",
+    )
     parser.add_argument("--user-agent", default=DEFAULT_UA)
     return asyncio.run(run(parser.parse_args()))
 

@@ -48,11 +48,13 @@ ARTICLE_HOSTS: frozenset[str] = frozenset({"www.australianmining.com.au"})
 # 价格源
 # ---------------------------------------------------------------------------
 
-QuoteFormat = Literal["gfex_daily", "sina_kline"]
+QuoteFormat = Literal["gfex_daily", "sina_kline", "lme_hero"]
 """行情接口的**形状**。它同时决定怎么发请求和怎么解析：
 
 - `gfex_daily`：POST 表单带 `trade_date`，一次只回**一天**的行。
 - `sina_kline`：GET，一次回**全部历史**的日 K 线。
+- `lme_hero`：GET，返回**一个**数字（当日的 3 个月收盘价）—— 页面是 JavaScript
+  渲染的，所以它必须走无头浏览器（见 `requires_browser`）。
 
 把形状做成登记表里的一个字段，而不是在 adapter 里 `if commodity == "lithium"`，
 是为了让"加一个品种"只改这张表、不碰逻辑。
@@ -60,6 +62,10 @@ QuoteFormat = Literal["gfex_daily", "sina_kline"]
 
 #: GFEX 日行情接口。**必须是 POST** —— 同一路径用 GET 会被 WAF 挡成 520（实测）。
 GFEX_DAY_QUOTES_URL = "http://www.gfex.com.cn/u/interfacesWebTiDayQuotes/loadList"
+
+#: LME 铜的行情页。整站挂 Cloudflare，普通 HTTP 客户端一律 403（实测），
+#: 只有真实页面导航能过 —— 所以它是**唯一**一个 `requires_browser=True` 的源。
+LME_COPPER_URL = "https://www.lme.com/en/metals/non-ferrous/lme-copper"
 
 #: 新浪财经的日 K 线接口。JSONP 包裹，返回品种的**全部**历史日线。
 #:
@@ -95,7 +101,12 @@ class PriceSource:
     page_url: str
     delayed: bool
     """数据源**固有**的延迟披露。不是回退标志 —— 回退一律看 `as_of < requested_date`
-    （ADR-0004）。DCE 与 GFEX 的日行情都是当日发布，所以是 `False`。"""
+    （ADR-0004）。DCE 与 GFEX 的日行情都是当日发布，所以是 `False`；
+    LME 的行情页自己写着 "day-delayed"，所以是 `True`。"""
+
+    requires_browser: bool = False
+    """这个源只能靠**真实页面导航**取数（JavaScript 渲染 / 过 Cloudflare）。
+    它随登记表传进 `build_fetcher` 决定分流，是"数据源事实"，不是模式开关。"""
 
 
 PRICE_SOURCES: dict[str, PriceSource] = {
@@ -128,4 +139,32 @@ PRICE_SOURCES: dict[str, PriceSource] = {
         page_url="https://finance.sina.com.cn/futures/quotes/I0.shtml",
         delayed=False,
     ),
+    # 铜：LME 的行情页。合约代码 `CA`、报价 `US$ per tonne`、标注 "day-delayed"
+    # —— 这三项都不是我们定的，是页面自己在 "Key contract information" 里写的
+    # （fixtures/prices/copper-lme-hero.html 里可逐字核到）。
+    # `delayed=True` 的依据就是那句 "day-delayed"：它是**数据源固有**的延迟，
+    # 与"回退到了更早的一天"是两件事（ADR-0004）。
+    "copper": PriceSource(
+        commodity="copper",
+        exchange="LME",
+        symbol="CA",
+        currency="USD",
+        unit="吨",
+        quote_format="lme_hero",
+        quote_url=LME_COPPER_URL,
+        page_url=LME_COPPER_URL,
+        delayed=True,
+        requires_browser=True,
+    ),
 }
+
+
+def browser_urls() -> frozenset[str]:
+    """需要无头浏览器才能取数的那些 URL —— 由登记表推出，不另立一份清单。
+
+    另立一份的话，加一个浏览器源就得改两个地方，而漏改的那次不会报错，只会让
+    新源静静地走 HTTP、然后 403。
+    """
+    return frozenset(
+        source.quote_url for source in PRICE_SOURCES.values() if source.requires_browser
+    )

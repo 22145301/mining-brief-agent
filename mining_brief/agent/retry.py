@@ -14,7 +14,7 @@ import asyncio
 from collections.abc import Awaitable, Callable, Mapping
 from typing import Any, TypeVar
 
-from mining_brief.errors import ReplayMiss
+from mining_brief.errors import LoudFailure
 
 T = TypeVar("T")
 
@@ -39,8 +39,8 @@ async def with_retry(
     for attempt in range(1, attempts + 1):
         try:
             return await operation()
-        except ReplayMiss:
-            # 录播缺失重试一万次也还是缺失 —— 立刻上抛，不浪费退避的时间。
+        except LoudFailure:
+            # 录播缺失重试一万次也还是缺失；缺浏览器同理 —— 立刻上抛，不浪费退避的时间。
             raise
         except Exception as exc:
             last = exc

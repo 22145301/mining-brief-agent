@@ -54,6 +54,7 @@ def settings(tmp_path: Path) -> Settings:
         user_agent="mining-brief-test/0.1 (+test@example.com)",
         http_timeout_s=5.0,
         browser_timeout_s=5.0,
+        browser_channel="",
         output_dir=str(tmp_path / "briefs"),
         fetch_attempts=3,
         retry_base_delay_s=0.0,

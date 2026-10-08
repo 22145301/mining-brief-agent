@@ -26,7 +26,13 @@ from mining_brief.contracts import (
     PriceSeries,
     ResourceExtract,
 )
-from mining_brief.errors import REPLAY_MISS_SENTINEL, ReplayMiss, ToolCallFailed
+from mining_brief.errors import (
+    BROWSER_UNAVAILABLE_SENTINEL,
+    REPLAY_MISS_SENTINEL,
+    BrowserUnavailable,
+    ReplayMiss,
+    ToolCallFailed,
+)
 
 
 def unwrap_task_group_exception(exc: BaseException) -> BaseException:
@@ -91,16 +97,20 @@ def _error_text(result: Any) -> str:
 async def _call(session: ClientSession, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     """调一次工具并要回结构化结果。
 
-    错误结果分两种，**必须分开**（见 `errors.py`）：回放录播缺失是我们自己的问题，
-    原样抛 `ReplayMiss` 让它炸穿整张图；其余工具故障抛 `ToolCallFailed`，由 fetch
-    节点降级成信封。MCP 不传异常类型，所以靠 `ReplayMiss` 消息里的哨兵串认它 ——
-    这是全仓库唯一一处跨进程的字符串契约，两边引用的是同一个常量。
+    错误结果分三种，**必须分开**（见 `errors.py`）：回放录播缺失、缺无头浏览器，
+    都是"我们自己这边不对"，原样抛对应的 `LoudFailure` 让它炸穿整张图；其余工具
+    故障抛 `ToolCallFailed`，由 fetch 节点降级成信封。MCP 不传异常类型，所以靠消息
+    里的哨兵串认它们 —— 这是全仓库唯一一处跨进程的字符串契约，两边引用的是同一个
+    常量。**漏认一个哨兵的后果是不对称的**：漏了录播缺失，缺的那天会被静默当成
+    "源没数据"；漏了缺浏览器，铜价缺失会被当成"LME 今天没发布"。
     """
     result = await session.call_tool(name, arguments)
     if result.isError:
         text = _error_text(result)
         if REPLAY_MISS_SENTINEL in text:
             raise ReplayMiss(f"MCP 工具 {name} {text}")
+        if BROWSER_UNAVAILABLE_SENTINEL in text:
+            raise BrowserUnavailable(f"MCP 工具 {name} {text}")
         raise ToolCallFailed(f"MCP 工具 {name} 报错：{text}")
 
     structured = result.structuredContent
