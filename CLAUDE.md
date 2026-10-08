@@ -42,14 +42,17 @@
 
 ## Agent skills
 
+本仓库使用 Matt Pocock 工程范式技能，主流程：`/grill-me` → `/to-spec` → `/to-tickets` → `/implement`（内部用 `/tdd`）。技能本身在 `.claude/skills/`，属个人工具链、已被 `.gitignore` 排除，不入库；下面三个约定文件入库。
+
 ### Issue tracker
 
-Issues and specs live as markdown files under `.scratch/<feature>/` — this repo has no git remote. See `docs/agents/issue-tracker.md`.
+issue 以本地 Markdown 存放在 `.scratch/<feature-slug>/`，无 git remote，不走 GitHub Issues。详见 `docs/agents/issue-tracker.md`。
 
 ### Triage labels
 
-Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+沿用默认词表，标签串与角色同名：category 用 `bug` / `enhancement`，state 用 `needs-triage` / `needs-info` / `ready-for-agent` / `ready-for-human` / `wontfix`。详见 `docs/agents/triage-labels.md`。
 
 ### Domain docs
 
-Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+单上下文（single-context）：根目录 `CONTEXT.md` + `docs/adr/`。详见 `docs/agents/domain.md`。
+
