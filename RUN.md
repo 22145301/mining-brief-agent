@@ -21,12 +21,21 @@ docker compose up
 ```
 
 文件名里的日期是**数据时点**（fixture 锚点），不是你跑它的那天 —— 同一输入两次跑，
-这个文件逐字节相同。想换个问题，就问另外两句**已录播**的样例句（都是拒答，正好看边界）：
+这个文件逐字节相同（换行符钉死成 LF，所以在 Windows 上本地跑与在容器里跑**也是同一串字节**）。
+想换个问题，就问另外三句**已录播**的样例句：
 
 ```bash
-docker compose run --rm brief mining-brief brief "帮我预测一下明天铜价会涨吗"     # 越界：本系统不做预测
-docker compose run --rm brief mining-brief brief "看看 Escondida 铜矿最近 3 天"  # 未覆盖：不在档案内
+# 什么矿山、什么品种都不指定 → 范围是**整个档案**：8 座矿、3 个品种
+docker compose run --rm brief mining-brief brief "给我生成一份今日简报"
+
+# 看边界的两句：一句越界（不做预测）、一句未覆盖（不在档案内）
+docker compose run --rm brief mining-brief brief "帮我预测一下明天铜价会涨吗"
+docker compose run --rm brief mining-brief brief "看看 Escondida 铜矿最近 3 天"
 ```
+
+第一句值得一看：价格那一节同时出现锂 / 铜 / 铁矿石三行，**三个数据时点各自标注** ——
+铜是 `2026-10-05` 且写明"延迟披露"（LME 只给延迟收盘价），锂与铁矿石是 `2026-10-08` 当日。
+三个不同来源的价格能并排站在一起且各说各的时点，是这份产物最该被检验的地方。
 
 （`docker compose run` 的 `brief` 是**服务名**，后面那串才是命令。）
 

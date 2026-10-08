@@ -823,3 +823,67 @@ async def test_an_invented_number_costs_only_that_one_section_its_lead(
     marked = [fact.text for fact in integrity.facts if "没有导读" in fact.text]
     assert marked and SECTION_TITLES[SectionKey.PRICES] in marked[0]
     assert "越界" not in marked[0] and "以外的东西" in marked[0], marked[0]
+
+
+# ---------------------------------------------------------------------------
+# 不指定矿山与品种时，范围是整个档案（User Story 3）
+# ---------------------------------------------------------------------------
+
+
+async def test_an_unspecified_request_covers_the_whole_archive(
+    settings: Settings, fixture_root: Path, llm_fixture_root: Path
+) -> None:
+    """**一句话里什么都不指定** → 8 座矿全在范围内，价格一节三项齐、各带自己的数据时点。
+
+    这条补的是 03 / 04 两张工单各留了半格的验收项。当时档案里只有 Pilgangoora 一条，
+    单矿请求的范围推出来只有锂，那半格写的是"在当前端到端路径上做不到"—— 06 号工单把
+    档案补到 8 座矿 / 3 个品种之后它就能做到了，于是用**同一句已录播的话**把它补上：
+    这句话不经过任何人工拼装的状态，走的就是 `parse_intent → … → render` 整条路。
+
+    断言的是**数据**不是措辞：三行价格的事实文本由 `compute_signals` 从价格序列拼出
+    （品种、数值、单位、交易所与合约、数据时点、延迟/回退限定词），与模型写什么无关，
+    所以 `pytest --record-llm` 重录之后这条断言照样成立。
+    """
+    request = "给我生成一份今日简报"
+
+    result = await _run(settings, fixture_root, request)
+
+    assert result.refusal is None
+
+    # 范围本身不进 `BriefResult`（契约里没有 scope 字段），但第六节会把"覆盖范围"
+    # 如实写出来 —— 那是产物里"这次到底覆盖了谁"的**唯一**书面凭据，所以就在那里断言。
+    integrity = next(s for s in result.sections if s.key is SectionKey.INTEGRITY)
+    coverage = [fact.text for fact in integrity.facts if "覆盖范围" in fact.text]
+    assert len(coverage) == 1, coverage
+    assert len(ARCHIVE) == 8, "档案规模变了就要重看这条用例的前提"
+    for entry in ARCHIVE:
+        assert entry.project in coverage[0], f"{entry.project} 不在覆盖范围里：{coverage[0]}"
+
+    prices = next(s for s in result.sections if s.key is SectionKey.PRICES)
+    lines = [fact.text for fact in prices.facts]
+    assert len(lines) == 3, lines
+
+    lithium = _only(lines, "锂 ")
+    copper = _only(lines, "铜 ")
+    iron = _only(lines, "铁矿石 ")
+
+    # 三个品种各自的数值与数据时点 —— 铜比另两项早三天，因为 LME 只给延迟收盘价。
+    assert "117300.0" in lithium and "2026-10-08" in lithium
+    assert "682.5" in iron and "2026-10-08" in iron
+    assert "14415.0" in copper and "2026-10-05" in copper
+    assert "延迟披露" in copper, "铜的延迟属性必须在产物里看得见"
+    assert "延迟披露" not in lithium and "延迟披露" not in iron
+    # 两处"当日"是同一天，不是回退：10-01…10-07 国庆休市，两个市场都在 10-08 恢复。
+    assert "当日" in lithium and "当日" in iron
+    assert "回退" not in lithium and "回退" not in iron
+
+    # 范围大不等于某一节可以空着 —— 第六节之外每节都得有内容。
+    for section in result.sections:
+        assert section.facts or section.note, f"{section.title} 既没事实也没说明"
+
+
+def _only(lines: list[str], prefix: str) -> str:
+    """按品种前缀取那一行。三行里恰好一行匹配，多一行少一行都说明拼装坏了。"""
+    matched = [line for line in lines if line.startswith(prefix)]
+    assert len(matched) == 1, f"{prefix!r} 命中 {len(matched)} 行：{lines}"
+    return matched[0]
