@@ -1,0 +1,43 @@
+# 环境变量与密钥 —— 任何情况下不得提交
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Node
+node_modules/
+.next/
+out/
+coverage/
+npm-debug.log*
+.pnpm-store/
+
+# 本地数据库文件
+*.db
+*.sqlite3
+
+# 编辑器与操作系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Claude Code 本地设置与技能定义（个人工具链，不进仓库）
+.claude/settings.local.json
+.claude/skills/
