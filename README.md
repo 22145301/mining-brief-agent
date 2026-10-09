@@ -32,7 +32,7 @@ parse_intent → resolve_entities → check_scope ─┼─ fetch_prices ──�
 
 三个并行 fetch 节点各自独立超时、重试、失败降级 —— 这是"为什么用图而不是顺序脚本"的全部答案，也是"任一源挂掉日报照样出"的实现方式（见 [`docs/adr/0006`](docs/adr/0006-fetch-nodes-catch-their-own-failures.md)）。
 
-数据采集走三个 MCP server（`mining-news-mcp` / `mineral-pdf-mcp` / `lme-price-mcp`），**LLM 不做工具选择** —— 日报的数据采集是固定流程，把工具选择交给模型只会引入不确定性。同一批 server 可零改动挂进 Claude Desktop / Cursor，见 [`mcp-config.json`](mcp-config.json)。
+数据采集走三个 MCP server（`mining-news-mcp` / `mineral-pdf-mcp` / `lme-price-mcp`），**LLM 不做工具选择** —— 日报的数据采集是固定流程，把工具选择交给模型只会引入不确定性。同一批 server 也能挂进 MCP 宿主单独用 —— 但**各家读的文件名与变量规则不同**，见下文「挂进 MCP 宿主」与 [`mcp-config.json`](mcp-config.json)。
 
 ## 装 / 跑 / 测
 
@@ -67,28 +67,48 @@ uv run pytest -m stdio                                # 真子进程走 stdio �
 格式化**只有一个权威**（ruff）。Black 与 `ruff format` 对同一份文件会给出不同结果，
 两个都挂只会让 CI 取决于谁先跑 —— 实测记录写在 `pyproject.toml` 里。
 
-### 挂进 MCP 宿主（Claude Desktop / Cursor / Claude Code）
+### 挂进 MCP 宿主（Claude Code / Cursor / Claude Desktop）
 
 三个 server 也能**脱离这份日报**单独用。根目录的 [`mcp-config.json`](mcp-config.json)
-把三个都列好了，都是 `uv run --directory ${workspaceFolder} <server 名>`：
+是**题面点名的那份同名文件**（按题面要求放根目录），三个 server 各一条，命令行都是
+`uv run --directory <仓库路径> <server 名>`。
 
-- **Cursor / Claude Code（项目级）**：`${workspaceFolder}` 由宿主替换成仓库路径，**原样可用**。
-- **Claude Desktop**：它不做变量替换，把 `${workspaceFolder}` 换成 clone 的绝对路径即可
-  （`sed -i "s|\${workspaceFolder}|$PWD|g" mcp-config.json`）。
+它是**给人照着配置的模板**，不是会被宿主自动读到的文件 —— 各家读的文件名、认的变量
+都不一样，别指望拷一份过去就生效：
+
+- **Cursor / VS Code**：认 `${workspaceFolder}`（那是它们的约定），把 `mcp-config.json`
+  放进各自的配置文件即可 —— **本仓库没实机验过**，配置路径以各自文档为准。
+- **Claude Desktop**：不认任何变量，把 `${workspaceFolder}` 换成 clone 的绝对路径
+  （`sed -i "s|\${workspaceFolder}|$PWD|g" mcp-config.json`）再放进去。它**也不继承你的
+  shell `PATH`**，`uv` 可能压根解析不到 —— 稳妥写法是 `command` 直接写 `uv.exe` 的绝对路径。
+  **同样没实机验过。**
 - 想再省一步：`uv tool install .` 会把三个名字放进 PATH，此时 `command` 直接写
   `mining-news-mcp` 就行 —— 但要把 `MINING_FIXTURE_ROOT` 指向 clone 里的 `fixtures/`
   （工具装到别处的 venv 里了，录播不在它旁边）。
 
-自查一条命令：
+**Claude Code 是唯一实机验过的一档**，而它跟上面两家都不一样：项目级配置的文件名**写死是
+`.mcp.json`**（`mcp-config.json` 不会被发现），而且它**不认 `${workspaceFolder}`** ——
+在 Claude Code 里 `${...}` 是**环境变量**语法，照抄 `mcp-config.json` 会当场得到
+`Missing environment variables: workspaceFolder`。走 `claude mcp add`：
 
 ```bash
-claude mcp list        # 三个都该是 ✔ Connected
+claude mcp add mining-news-mcp \
+  -e MINING_DATA_MODE=replay -e MINING_LLM_MODE=replay \
+  -- uv run --directory "$PWD" mining-news-mcp     # 三个 server 各来一遍
+claude mcp list                                    # 三个都该是 ✔ Connected
 ```
 
-在真宿主里实测过（2026-10-08，Claude Code，`✔ Connected` × 3）。两个细节让这件事成立：
+`-s local`（默认）只写进本机 `~/.claude.json`、只对当前项目生效，不入库；
+`claude mcp remove <server 名>` 撤销。
+
+实测是 2026-10-08 与 2026-10-09 在 Claude Code 上做的（`✔ Connected` × 3 ——
+`claude mcp list` 真起进程、真发 `initialize`，不是配置回显）。两个细节让"挂载"这件事成立：
 **默认录播根按安装位置推、不按 cwd 推**（宿主拉起 server 时工作目录是宿主的），
 以及**日志一律走 stderr**（stdio 传输下 stdout 只归协议所有）。两条都有用例守着，
 见 `tests/test_stdio_smoke.py`。
+
+`✔ Connected` 证的是**挂载 + `initialize` + 工具发现**，不证工具**调用** —— 那一半由
+`tests/test_stdio_smoke.py` 用真子进程、真协议帧覆盖（同一条路，只是客户端是我们自己的）。
 
 ## 数据源与取舍（如实声明）
 
@@ -188,7 +208,7 @@ LME 官网整站挂在 Cloudflare 后面：`httpx`、`urllib`、`curl` 直取**�
 |---|---|
 | [`RUN.md`](RUN.md) | 题面点名的 5 分钟通道：clone → `docker compose up` → 产物在哪 |
 | [`Dockerfile`](Dockerfile) / [`docker-compose.yml`](docker-compose.yml) | 单服务、跑完即退、零凭证零网络的容器通道 |
-| [`mcp-config.json`](mcp-config.json) | 把三个 server 挂进 Claude Desktop / Cursor（与题面同名放根目录） |
+| [`mcp-config.json`](mcp-config.json) | 题面要求的同名模板：三个 server 的挂载配置（各家宿主读的文件名不同，见上文「挂进 MCP 宿主」） |
 | [`CONTEXT.md`](CONTEXT.md) | 领域术语表，产出物与代码的用词一律以此为准 |
 | [`docs/risk-rules.md`](docs/risk-rules.md) | 风险规则集的逐字原文、出处与哈希（工单 02 的取证记录） |
 | [`docs/adr/`](docs/adr/) | 九条关键取舍的完整记录 |
