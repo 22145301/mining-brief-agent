@@ -254,3 +254,46 @@ def test_no_registered_source_is_left_without_a_known_shape(commodity: str) -> N
 
     assert source.quote_format in ("gfex_daily", "sina_kline")
     assert source.quote_url and source.page_url and source.quote_url != source.page_url
+
+
+# ---------------------------------------------------------------------------
+# 发布方（ADR-0010）：来源清单印的是它，不是合约所在的交易所
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("commodity", sorted(PRICE_SOURCES))
+def test_every_registered_source_declares_its_publisher(commodity: str) -> None:
+    """每个源都要**显式**声明发布方，且不许等于空串。
+
+    它没有默认为 `exchange`，理由和单位一样：发布方读不出来、写错了也不报错 ——
+    只会在产物里安静地印一个错出处。铁矿石正是唯一一个与 `exchange` 不同的源，
+    一旦允许默认为 `exchange`，它就必然被写错。
+    """
+    source = PRICE_SOURCES[commodity]
+
+    assert source.publisher.strip(), f"{commodity} 没声明发布方"
+    assert source.publisher != ""
+
+
+def test_iron_ore_carries_sina_as_publisher_because_dce_blocks_this_environment(
+    fixture_root: Path,
+) -> None:
+    """铁矿石那条：**合约是 DCE 的，数据是新浪财经转的** —— 解析后必须两样都在。
+
+    这个源是本仓库对工单 03「铁矿石路由到 DCE」的一处**实测导致的偏离**：
+    `www.dce.com.cn` 对本环境的所有 HTTP 客户端（含真 Chrome）返回 412 挑战页。
+    新浪的日 K 线里载的就是 DCE 的 i 合约，两处还能交叉核对（见上面那条测试）。
+    所以这里同时钉住 `exchange == "DCE"` 与 `publisher == "新浪财经"` —— 少任何
+    一个，产物要么认不出合约，要么把出处记成 DCE 而链接指向新浪（ADR-0010）。
+    """
+    source = PRICE_SOURCES["iron_ore"]
+    assert source.exchange == "DCE"
+    assert source.publisher == "新浪财经"
+
+    points = parse_sina_kline(
+        _recorded(FixtureStore(fixture_root), "iron_ore-I0-kline.json"), source
+    )
+
+    assert points, "录播得真解析出点来，否则下面那两条断言在空序列上永远成立"
+    assert all(point.exchange == "DCE" for point in points)
+    assert all(point.publisher == "新浪财经" for point in points)

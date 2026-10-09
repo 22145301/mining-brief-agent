@@ -89,7 +89,16 @@ class PriceSource:
 
     commodity: str
     exchange: str
-    """合约所在的交易所。注意它**不一定**等于数据的发布方，见 `PRICE_SOURCES` 的说明。"""
+    """合约所在的交易所。注意它**不一定**等于数据的发布方 —— 那由 `publisher` 记。"""
+
+    publisher: str
+    """这条行情**实际的发布方**，一路带到引用清单（ADR-0010）。
+
+    它对每个源都是**人声明的**，理由与单位一样：它不能从响应里读出来，而写错它
+    不会有任何报错 —— 产物会安静地印出一个看起来正常的错出处。三者里只有铁矿石
+    与 `exchange` 不同（合约是 DCE 的，数据是新浪财经的），所以它必须被显式写出，
+    不能默认成 `exchange`。
+    """
 
     symbol: str
     """交易所的品种代码（`lc` / `I0`）。GFEX 的合约代码还要拼上交割月。"""
@@ -113,6 +122,7 @@ PRICE_SOURCES: dict[str, PriceSource] = {
     "lithium": PriceSource(
         commodity="lithium",
         exchange="GFEX",
+        publisher="GFEX",
         symbol="lc",
         currency="元",
         unit="吨",
@@ -127,10 +137,14 @@ PRICE_SOURCES: dict[str, PriceSource] = {
     # 拿不到官方行情。新浪的日 K 线里载的**就是 DCE 的 i 合约**，且两处可交叉核对：
     # 2026-10-08 的结算价，GFEX 官方 `clearPrice`、新浪 `s` 字段同为 121540
     # （碳酸锂主力 2701，持仓量 409678 两边一致）—— 见 `tests/test_price_parsers.py`。
-    # 引用块里 `publisher` 记的是新浪财经，不是 DCE：数据的**发布方**是谁就写谁。
+    # 所以这一条的 `publisher` 记的是**新浪财经**，不是 `exchange` 的 DCE ——
+    # 数据的**发布方**是谁就写谁，合约归谁不改变这一点（ADR-0010）。
+    # 产物正文里仍印 `DCE I0`（那是**合约**，读者要靠它认行情），引用块末尾印
+    # `新浪财经 · <日期>` 加新浪的链接（那是**出处**）；两者各说各的，不冲突。
     "iron_ore": PriceSource(
         commodity="iron_ore",
         exchange="DCE",
+        publisher="新浪财经",
         symbol="I0",
         currency="元",
         unit="吨",
@@ -147,6 +161,7 @@ PRICE_SOURCES: dict[str, PriceSource] = {
     "copper": PriceSource(
         commodity="copper",
         exchange="LME",
+        publisher="LME",
         symbol="CA",
         currency="USD",
         unit="吨",

@@ -32,10 +32,15 @@ def _series(
     *points: tuple[str, float],
     delayed: bool = False,
     last_requested_date: str | None = None,
+    publisher: str | None = None,
 ) -> PriceSeries:
     """`last_requested_date` 是**唯一**能造出回退的手段 —— 因为回退就是
     `as_of < requested_date` 这一条式子（ADR-0004），没有独立开关可以拨。
     传它一个更晚的日期，最后一个点就自动成为回退点。
+
+    `publisher` 不传就取 `exchange` —— 这只是**测试夹具**的省事写法，不是契约的
+    默认值：GFEX 与 LME 的发布方确实就是它们的交易所，只有铁矿石那条不同，
+    而它必须被显式写出来（这正是本文件末尾那条用例在盯的事）。
     """
     last = len(points) - 1
     return PriceSeries(
@@ -49,6 +54,7 @@ def _series(
             PricePoint(
                 commodity=commodity,
                 exchange=exchange,
+                publisher=publisher if publisher is not None else exchange,
                 symbol=symbol,
                 value=value,
                 currency="元",
@@ -80,7 +86,13 @@ def test_two_commodities_each_get_their_own_line_and_their_own_cutoff() -> None:
                     "lithium", "GFEX", "lc2701", ("2026-10-07", 116500.0), ("2026-10-08", 117300.0)
                 ),
                 "iron_ore": _series(
-                    "iron_ore", "DCE", "I0", ("2026-09-30", 780.5), ("2026-10-08", 791.0)
+                    "iron_ore",
+                    "DCE",
+                    "I0",
+                    ("2026-09-30", 780.5),
+                    ("2026-10-08", 791.0),
+                    # 合约是 DCE 的，数据是新浪财经转载的 —— 发布方与合约方不是一回事。
+                    publisher="新浪财经",
                 ),
             }
         },
@@ -99,7 +111,8 @@ def test_two_commodities_each_get_their_own_line_and_their_own_cutoff() -> None:
     assert "2026-10-08" in texts["锂"]
     assert "2026-10-08" in texts["铁矿石"]
     # 两个来源各自成一条引用，不能合并 —— 合并了就没法回溯到某一家的行情页。
-    assert {citation.publisher for citation in ledger.citations} == {"GFEX", "DCE"}
+    # 铁矿石那条印的是**发布方**新浪财经，不是合约所在的 DCE（ADR-0010）。
+    assert {citation.publisher for citation in ledger.citations} == {"GFEX", "新浪财经"}
 
 
 def test_the_section_cutoff_cannot_be_earlier_than_the_latest_point() -> None:
@@ -265,3 +278,50 @@ def test_a_delayed_commodity_that_also_fell_back_prints_both_qualifiers() -> Non
     assert "回退自 2026-10-06" in text, "我们这一次往前找了一天"
     assert "当日" not in text, "延迟与非延迟是互斥的两种说法，不能同时印出来"
     assert section.as_of == "2026-10-05"
+
+
+def test_the_citation_names_the_publisher_not_the_exchange() -> None:
+    """引用块的出处写**发布方**，正文的括号里写**合约所在的交易所** —— 两者各说各的。
+
+    这条盯的是产物里真实出现过的一处自相矛盾（2026-10-09 的实时产物，第 [22] 条）：
+
+        铁矿石 682.5 元/吨（DCE I0，2026-10-08，当日）
+        **[22]**（价格）DCE I0
+          DCE · 2026-10-08
+          <https://finance.sina.com.cn/futures/quotes/I0.shtml>
+
+    出处写着 DCE，链接却指向新浪 —— 同一条引用里两个「谁给的」互不相同，读者
+    没法判断该信哪一头。根子是 `PricePoint` 契约里只有 `exchange`、没有发布方，
+    于是 `nodes.py` 只能把合约方当发布方印出去，而这**违背了 `Citation.publisher`
+    自己的契约**（"原样搬运工具返回值" —— 工具当时根本不返回发布方）。
+
+    修法不是印得更含糊，是把它拆成两件事：正文保留 `DCE I0`（读者靠合约名认行情），
+    出处改成新浪财经并配上新浪的链接（数据实际是谁给的）。附件两处一起断言，
+    免得以后有人把其中一处"顺手统一"了。
+    """
+    ledger = CitationLedger()
+    section = _prices_section(
+        {
+            "prices": {
+                "iron_ore": _series(
+                    "iron_ore",
+                    "DCE",
+                    "I0",
+                    ("2026-10-08", 682.5),
+                    publisher="新浪财经",
+                )
+            }
+        },
+        ledger,
+    )
+
+    text = section.facts[0].text
+    assert "DCE I0" in text, "正文要留合约名 —— 它才是读者认行情用的东西"
+    assert "新浪财经" not in text, "正文不扛出处；出处归引用块，一节一个位置"
+
+    (citation,) = ledger.citations
+    assert citation.publisher == "新浪财经", "出处印的必须是发布方"
+    assert citation.publisher != "DCE", "印成合约所在的交易所就是这次要修的那个错"
+    # 标题留的是**合约**（`DCE I0`），出处是**发布方**（新浪财经）—— 一条引用里
+    # 两件事各就各位。把标题也换成发布方会让"这是哪份合约"在来源清单里消失。
+    assert citation.title == "DCE I0"

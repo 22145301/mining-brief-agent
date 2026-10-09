@@ -110,6 +110,7 @@ def parse_gfex_daily(raw: RawResponse, source: PriceSource, trade_date: str) -> 
     return PricePoint(
         commodity=source.commodity,
         exchange=source.exchange,
+        publisher=source.publisher,
         symbol=f"{source.symbol}{main['delivMonth']}",
         value=float(main["close"]),
         currency=source.currency,
@@ -143,6 +144,7 @@ def parse_sina_kline(raw: RawResponse, source: PriceSource) -> tuple[PricePoint,
             PricePoint(
                 commodity=source.commodity,
                 exchange=source.exchange,
+                publisher=source.publisher,
                 symbol=source.symbol,
                 value=float(row["c"]),
                 currency=source.currency,
@@ -239,6 +241,7 @@ def parse_lme_hero(raw: RawResponse, source: PriceSource) -> PricePoint:
     return PricePoint(
         commodity=source.commodity,
         exchange=source.exchange,
+        publisher=source.publisher,
         symbol=f"{source.symbol} 3-month",
         value=float(page.hero_number.replace(",", "")),
         currency=source.currency,

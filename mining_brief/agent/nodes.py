@@ -618,7 +618,12 @@ def _prices_section(state: BriefState, ledger: CitationLedger) -> Section:
                     kind="price",
                     title=f"{latest.exchange} {latest.symbol}",
                     url=latest.source_url,
-                    publisher=latest.exchange,
+                    # 出处写**发布方**，不写合约所在的交易所。铁矿石那条最能说明：
+                    # 正文印 `DCE I0`（读者要靠合约名认行情），引用块末尾印
+                    # `新浪财经`（数据实际是谁给的，链接也指向它）。两者若不分开，
+                    # 就会出现「发布方写 DCE、链接写新浪」——读者无从判断该信哪头，
+                    # 而 `Citation.publisher` 的契约是**原样搬运工具返回值**。
+                    publisher=latest.publisher,
                     timestamp=latest.as_of,
                 ),
             )

@@ -149,6 +149,7 @@ ResourceTable = {
 ```python
 PricePoint = {
   commodity, exchange, symbol,      # 三所 adapter：LME / GFEX / DCE
+  publisher,                        # 数据实际的发布方，未必 = exchange（见 ADR-0010）
   value, currency, unit,
   as_of,                            # ISO8601
   delayed: bool,                    # LME 为 true（延迟一日收盘）
@@ -159,6 +160,8 @@ PricePoint = {
 
 > **注**：`requested_date` 与 `delayed` 的语义区分见 `docs/adr/0004-price-adapter-falls-back-and-splits-dates.md`。
 > `delayed` 表示**数据源固有**延迟；"回退到了更早的日期"一律由 `as_of < requested_date` 表达，不设独立标志位。
+> `publisher` 见 `docs/adr/0010-price-point-publisher-field.md`：三所里只有铁矿石的发布方不是它的交易所
+> （合约是 DCE 的，数据取自新浪财经转载的日 K 线），所以它必须与 `exchange` 分开记、且不得默认为 `exchange`。
 
 ### 6.2 Agent 编排（LangGraph）
 

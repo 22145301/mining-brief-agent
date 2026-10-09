@@ -19,6 +19,18 @@ class PricePoint(BaseModel):
 
     commodity: str
     exchange: str
+    """合约所在的交易所。它**不一定**是数据的发布方 —— 见 `publisher`。"""
+
+    publisher: str
+    """这条行情**实际的发布方**，引用清单里 `publisher` 印的就是它（ADR-0010）。
+
+    与 `exchange` 分开是因为二者真的会不同：铁矿石的合约是 DCE 的，但数据取自
+    新浪财经转载的日 K 线（`www.dce.com.cn` 对本环境返回 412，见 `PRICE_SOURCES`
+    的说明）。契约里若只有 `exchange`，引用块就只能印出「发布方写 DCE、链接写新浪」
+    这样一个自相矛盾的样子 —— 而 `Citation.publisher` 的契约是**原样搬运工具返回值**
+    （`contracts/brief.py:110`），工具不返回它，那一行就搬不出东西来。
+    """
+
     symbol: str
     value: float
     currency: str

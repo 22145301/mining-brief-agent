@@ -204,3 +204,4 @@ LME 官网整站挂在 Cloudflare 后面：`httpx`、`urllib`、`curl` 直取**�
 | [0007](docs/adr/0007-flat-state-no-reducers-derive-gaps.md) | state 扁平、零 reducer，缺失靠推导 |
 | [0008](docs/adr/0008-single-package-and-thin-mcp-servers.md) | 单包布局，MCP server 只做薄壳 |
 | [0009](docs/adr/0009-llm-replay-keyed-by-input-hash.md) | LLM 录播按输入数据哈希索引，查不到就报错 |
+| [0010](docs/adr/0010-price-point-publisher-field.md) | `PricePoint` 加 `publisher`：合约所在的交易所未必是发布方 |
