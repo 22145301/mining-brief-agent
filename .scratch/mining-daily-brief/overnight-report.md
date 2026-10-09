@@ -573,24 +573,36 @@ return datetime.now(UTC)             # 真实时钟
 换个说法：**这份 fixture 相对现实是"新"的**。它和实时结果对得上账，不是因为巧合，
 是因为录得够近。真要验"实时能取到新东西"，得隔几天再跑一次，或者换个更活跃的查询。
 
-### 10.4 这次**没**验到的：铜价与铁矿石（最脆的两条路）
+### 10.4 铜价与铁矿石：**2026-10-09 已跑，全通**
 
-Pilbara 那句的范围只有锂，所以第 4 节只有**一行**锂价（产物里写着 `价格（锂）：已取到 1 个
-数据点`）。**LME 铜（无头浏览器 + Cloudflare）与铁矿石这两条最脆的路径，这次一次都没走到**
-—— 它们只在覆盖范围含铜/铁矿石时才被触发。
-
-要验它们，得跑整档案那句：
+Pilbara 那句的范围只有锂，`价格（锂）：已取到 1 个数据点` —— 铜与铁矿石一次都没走到。
+所以随后又真跑了**整档案**那句：
 
 ```bash
-export MINING_LLM_API_KEY=...
-export MINING_HTTP_PROXY=http://127.0.0.1:7897
-export MINING_BROWSER_CHANNEL=chrome
 uv run mining-brief brief --live "给我生成一份今日简报" --out live-briefs
+# exit 0, refusal=False, sections=6, citations=23
 ```
 
-那一句同时也会让第 1 节「矿权动态」非空（回放版的整档案那句里有 `MACH Energy commits to
-responsible operation following court ruling`），可以顺带确认实时下这一节也认得出来。
-**截至本行，这一条还没跑 —— 跑之前不要把它当成已验。**
+第 4 节三行齐全：
+
+```
+- 铜 14415.0 USD/吨（LME CA 3-month，2026-10-05，延迟披露） [21]
+- 铁矿石 682.5 元/吨（DCE I0，2026-10-08，当日） [22]
+- 锂 117300.0 元/吨（GFEX lc2701，2026-10-08，当日） [23]
+```
+
+**最要紧的是第一行。** LME 铜这条路要走真实页面导航过 Cloudflare，是全仓库唯一一个
+`requires_browser=True` 的源，也是它当初逼出 `LoudFailure` 那条"缺浏览器就响亮报错、
+不许降级成没数据"的纪律。它实时跑通了，而且 `延迟披露` 如实印在产物上 —— ADR-0004
+要求它不被"回退到了更早的日期"混同，两个限定词在这里是分开的（`延迟披露` 有、
+`回退自` 无）。
+
+第 1 节也非空（`MACH Energy commits to responsible operation following court ruling`），
+与回放版一致；第 6 节把 8 座矿里 7 座的储量缺失**逐条给出各自的理由**（"该公司不单独
+发布项目级技术报告……"），不是一句笼统的"数据缺失"。
+
+**实时与回放的数据部分再一次逐字相同** —— 三行价格连 `as_of`、`延迟披露`、引用 URL
+全部一致。理由同 10.3：两次运行相隔 10 小时，同处一个交易日窗口。
 
 ### 10.5 第 1 节为空不是 bug（顺手澄清）
 
@@ -604,3 +616,46 @@ Pilbara 那句的第 1 节是空的（`本节没有取到任何数据`）。查�
 是我给的 `--out` 目录名漏了配套。已补（commit `d3c4f78`），并在注释里写明两者忽略的
 **理由不同**：回放产物可复现，实时产物不可复现，后者留档等于把一次偶然的网络快照
 伪装成仓库内容。
+
+### 10.7 验证时撞到的一处不一致：铁矿石引用块的「发布方」（**未处置，待拍板**）
+
+比对实时与回放两份产物时发现的。它与实时/回放**无关**（两边印的是同一串），是**文档与
+代码不一致**。
+
+产物里 `[22]` 印的是：
+
+```
+**[22]**（价格）DCE I0
+
+  DCE · 2026-10-08
+
+  <https://finance.sina.com.cn/futures/quotes/I0.shtml>
+```
+
+而 `mining_brief/config/sources.py:130` 的注释写着：
+
+> 引用块里 `publisher` 记的是新浪财经，不是 DCE：数据的**发布方**是谁就写谁。
+
+**这个 `publisher` 字段并不存在。** `PriceSource`（`commodity` / `exchange` / `symbol` /
+`currency` / `unit` / `quote_format` / `quote_url` / `page_url` / `delayed` /
+`requires_browser`）没有它，`PricePoint`（`commodity` / `exchange` / `symbol` / `value` /
+`currency` / `unit` / `as_of` / `delayed` / `source_url` / `requested_date`）也没有；
+`mining_brief/agent/nodes.py:621` 传的是 `publisher=latest.exchange`，于是印出 `DCE`。
+
+同处 `PriceSource.exchange` 的 docstring 还写着"注意它**不一定**等于数据的发布方，见
+`PRICE_SOURCES` 的说明" —— 说明这个区分**被设计过**，只是没落进契约。
+
+**事实层面没有错**：铁矿石那个数确实来自新浪转载的 DCE `i` 合约，`source_url` 也如实
+指向新浪；工单 03 还做过交叉核对（GFEX 官方 `clearPrice` 与新浪 `s` 字段同为 121540）。
+出问题的只是**命名**——同一条引用里发布方写 `DCE`、链接写 `新浪`，读者没法判断该信哪头。
+
+两条路线，代价不同，**我没有动**：
+
+1. **改代码**：`PriceSource` 加 `publisher` 字段、`PricePoint` 加同名字段、`nodes.py` 取它。
+   忠于注释记下的原意，但要动一个冻结的契约（`PricePoint`），与"为了记一件事就往正式
+   契约里加字段要付代价"同源（工单 05 判定五对同一类问题就是这么权衡的）。
+2. **改注释**：把 `sources.py:130` 改成如实描述**已实现**的约定（发布方 = 交易所，
+   取数点由 URL 承载）。零代码改动，但等于承认"发布方"这个概念在产物上不表达。
+
+我倾向 1：这个项目的卖点就是"每个事实都能回溯到原始来源"，而 `DCE · …` + 新浪链接
+恰好是这条卖点上最容易被指着问的一处。但它是契约改动，留给你定。
