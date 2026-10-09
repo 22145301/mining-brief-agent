@@ -25,9 +25,9 @@
   "project": "Shaakichiuwaanaan (CV5 + CV13)",
   "standard": "NI 43-101",
   "parsed_at": "2026-10-08T18:11:47.211115+00:00",
-  "human_verified": false,
-  "human_verified_by": null,
-  "human_verified_at": null,
+  "human_verified": true,
+  "human_verified_by": "266226",
+  "human_verified_at": "2026-10-09T10:52:20+08:00",
   "table": {
     "pdf_url": "https://www.pmet.ca/wp-content/uploads/2026/04/PMET_Site_Visit_September_2026_Final_to_lodge-1.pdf",
     "report_title": "PMET Resources Site Visit — NI 43-101 Mineral Resource Statement",

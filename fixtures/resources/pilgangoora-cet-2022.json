@@ -15,9 +15,9 @@
   "project": "Pilgangoora",
   "standard": "JORC",
   "parsed_at": "2026-10-08T18:11:38.165457+00:00",
-  "human_verified": false,
-  "human_verified_by": null,
-  "human_verified_at": null,
+  "human_verified": true,
+  "human_verified_by": "266226",
+  "human_verified_at": "2026-10-09T10:52:20+08:00",
   "table": {
     "pdf_url": "https://cet.edu.au/wp-content/uploads/Talk-6-Holmes_Pilgangoora-Exploration-Geology.pdf",
     "report_title": "Pilgangoora Exploration Geology（CET 演讲材料，资源量引自 2022 年报）",

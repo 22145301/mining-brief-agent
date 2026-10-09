@@ -25,7 +25,7 @@ stdio 档：9 passed（真子进程走 stdio 传输）
 | 02 风险规则原文级引用 | `done` | `bef6dc0` | 三份权威文件重下比对字节数+sha256 一致；5 条规则逐字核到条款号 |
 | 03 价格 GFEX / DCE | `done` | `b239188` + `9092476` | 跨源核对 117300 / 121540 / 409678 逐项相同；DCE 官网 412（实测） |
 | 04 价格 LME 走无头浏览器 | `done` | `618ada5` + `9092476` | httpx/curl 403、真 Chrome 200；铜 14415.0 / 2026-10-05 / 延迟披露 |
-| 05 储量 PDF 抽取 | **`needs-human`** | `a9be316` | 真下载真解析 2 份 PDF 通过；**`human_verified` 仍是 false** |
+| 05 储量 PDF 抽取 | `done` | `a9be316` + 2026-10-09 那次（见 §九） | 真下载真解析 2 份 PDF 通过；**2026-10-09 人工核对完毕，`human_verified` 已翻 True** |
 | 06 拒答与未覆盖 | `done` | `b63f581` | 8 座矿 3 品种逐条实测直链（404/403/连接失败各一） |
 | 07 风险信号引擎 | `done` | `fa5c520` | 引擎按冻结规则集实现；`inspect.getsource` 断言源码里没有 try/except |
 | 08 每节 LLM 导读 | `done` | `ab36f38` | 编造数字只丢那一节导读，其余五节保留（否定用例） |
@@ -161,6 +161,9 @@ pmet-shaakichiuwaanaan-2025.json: 5 714 740 B / 48 页, sha256 ffc6ca43…, 表�
   Indicated 107.991Mt@1.4%→3.75 Mt LCE；Inferred 33.38Mt@1.33%→1.09
 ```
 
+（上面两句 `human_verified=False` 是**当夜那次运行的如实输出，不追改**。2026-10-09 人工
+核对完成后两份都已翻成 `True` —— 过程见 §九。）
+
 R2 的直链按交接要求**各试一次就停**：ASX 2017 技术报告直链 → **HTTP 404**；
 公司官网 `pilbaraminerals.com.au` → **HTTP 403**（整站 Cloudflare）。**没有编链接**，
 改用同公司公开可下载的 CET 演讲材料第 36 页（那页原样印着 JORC 分类表，且页脚注、第 6 页正文
@@ -247,12 +250,13 @@ CI 结论取决于谁先跑。实测记录写在 `pyproject.toml` 的注释里�
 ## 三、需要人做的三件事（按优先级）
 
 **1. 核对工单 05 的资源量数字（唯一一个我没有资格替你勾的验收项）。**
-`human_verified` 两份都还是 `false`。核对清单（页面上就有，逐行对即可）：
+**✅ 2026-10-09 已做完** —— 使用者对着两份 PDF 的真实页面逐行核过，5 行数字与两处
+生效日全部相符，`human_verified` 已翻 `True` 并带上核对人与时间。全过程见 §九。
+核对清单（留着备查）：
 - CET 材料**第 36 页**：Measured 19 Mt / 1.4% / 0.3 Mt Li₂O；Indicated 187 Mt / 1.2% / 2.2；
   Inferred 99 Mt / 1.1% / 1.0（页上合计行 `Total 305 1.1 105 0.6 3.5 71`）
 - PMET 技术报告**第 41 页**：Indicated 107.991 Mt / 1.4% / 3.75 Mt LCE；Inferred 33.38 Mt / 1.33% / 1.09
 - 文件：`scripts/extract_resources.py` 能重跑；两份 PDF 的 URL、字节数、sha256 都在 `config/reports.py`
-核对完把两份冻结记录的 `human_verified` 改成 `true`（这是**一句话**的改动，我没有替你做）。
 
 **2. 拍板工单 07 记下的那处文档冲突：R5 是否按报告体系分流？**
 `docs/risk-rules.md` §2 里 R5 的触发条件**字面没写**"限 JORC 范围"，但同节 R1 注释、R5 注释、
@@ -271,7 +275,8 @@ JORC Clause 12 是实打实引错法条），代价是 `ArchiveEntry.standard` �
 ## 四、我没做的 / 我不确定的
 
 **没做**
-- 05 的人工核对（唯一一个 `needs-human`，就是上面第 1 条）。
+- ~~05 的人工核对（唯一一个 `needs-human`，就是上面第 1 条）。~~ —— **2026-10-09 已做完**，
+  见 §九。这一条从"没做"里划掉，是因为它现在真的做了，不是因为报告要好看。
 - **`--live` 的完整链路从没跑过**：`mining-brief brief --live "<一句话>"` 一次都没执行。
   两个开关的 live 侧**分别在录数据/录 LLM 时真跑过**（真 API、真抓取、真 Chrome 过 Cloudflare），
   但"一句话 + 实时数据 + 实时模型"串起来的那条路没有证据。
@@ -418,3 +423,96 @@ NI 43-101 的矿上确实是**引错法条**。
 - 候选矿山清单**逐条未核实**，只做转述（且已标注 agent 自查出的瑕疵）。
 - 上述 8.4 的三处全部**保持原状**，等你在早上定夺 —— 与 R5 那处冲突同一处理方式：
   冲突进报告，不动冻结文档。
+
+---
+
+## 九、追记：工单 05 的人工核对闭合（2026-10-09）
+
+这一节是交付**之后**补的，记的是 §三 第 1 条那件"我没有资格替你勾"的事 —— 它做完了。
+
+### 9.1 谁、怎么核的
+
+使用者本人，对着两份 PDF 的**真实页面**（不是 JSON 里那份 `page_text`）逐行看：
+
+- **Pilgangoora / CET 材料第 36 页**：Measured 19 Mt @1.4% → 0.3 Mt Li₂O、Indicated 187 @1.2% → 2.2、
+  Inferred 99 @1.1% → 1.0 —— 与冻结表逐行相符。
+- **PMET 第 41 页**：Indicated 107.991 Mt @1.40% → 3.75 Mt LCE、Inferred 33.38 Mt @1.33% → 1.09 —— 相符。
+
+### 9.2 核对中途提出的一个疑问（**不是错**，记下来免得下一个人再问一遍）
+
+> **问**：PMET 的吨位页面印的是 `107,991,000`，JSON 里却是 `107.991` —— 小数点是你加的吗？
+
+是设计，不是错。`ResourceRow.tonnage_mt` 的单位按契约就是**百万吨**
+（`contracts/resources.py:52` 的 docstring），登记表为这一页声明了 `scale=1e-6`
+（`config/reports.py:119`，注释里逐字抄了页面表头 `Tonnes(t) …`）。107,991,000 ÷ 1e6 = 107.991。
+
+对照 Pilgangoora：那页表头写的是 `Mdmt`（百万干吨），所以那一列用默认的 `scale=1.0`，
+19 就是 19。**同一个字段、两个页面单位，靠人声明而不是靠猜** —— 这正是
+`_row_to_contract` 那段注释（"单位错了差一百万倍，所以它由人声明、由人核对，解析器不猜单位"）
+要防的那类错。
+
+顺带一条比单位更强的内证：PMET 第 41 页自己在分类行**上方**印着小计（文本抽取后顺序是反的）——
+
+```
+101,828,000 + 6,163,000 = 107,991,000   ← 与我们要的 Indicated 行相加自洽
+ 13,898,000 + 19,482,000 =  33,380,000   ← 与 Inferred 行相加自洽
+```
+
+这条不依赖行序、只依赖数，与 `find_total_row` 那套"拿页面自己印的东西对表内相加"同一个意思。
+
+### 9.3 动了什么（六个字段 + 三份文档 + 一条测试）
+
+| 文件 | 改动 |
+|---|---|
+| `fixtures/resources/pilgangoora-cet-2022.json` | `human_verified` `false→true`、`human_verified_by`、`human_verified_at` |
+| `fixtures/resources/pmet-shaakichiuwaanaan-2025.json` | 同上 |
+| `tests/test_resources.py` | 守卫用例 `..._says_it_is_not_human_verified_yet` → `..._records_who_verified_it`；`test_flipping_the_verified_flag_changes_only_the_note` 改为**两个方向都验** |
+| `README.md` | "全部是 `false`"那段改成"已核对"，并写清这个字段不是装饰 |
+| `mining_brief/servers/mineral_pdf_server.py` | docstring 改成"没核过就必须 `false`、核过才允许 `true` 且要带核对人" |
+| `.scratch/.../issues/05-resource-extraction-pdf.md` | `Status: needs-human → done`；⛔ 一格勾上；补「收尾：人工核对的闭合」 |
+| 本报告 | §一 表内那一行、§二 的 `human_verified=False` 输出块（**加注，不追改**）、§三 第 1 条、§四 第一条 |
+
+改 JSON 用脚本原地做（`re.subn`）：这两份是 **CRLF** 文件，过编辑器很容易把行尾翻成 LF、
+让 diff 显示"整份文件都改了"。`git diff --numstat` 的结果是**每个文件恰好 3 行 + / 3 行 −**。
+
+**没动的**：`PRD.md`、`spec.md`、任何 ADR、`config/reports.py` 的列声明与换算系数、
+`scripts/extract_resources.py` 的行为（它**仍然**每次把字段写回 `false`），以及两侧冻结的
+`table` 数字本身。
+
+### 9.4 守卫还咬不咬人 —— 验过了，不是推测
+
+`human_verified` 一旦被核过，最容易发生的事是**有人重跑 `extract_resources.py`**（它按纪律
+把字段写回 `false`）**而没有重新核对**，于是"已核对"这个状态无声无息地倒退。所以守卫留在
+`True` 这一头，并真的喂了一次 `false` 看它炸不炸：
+
+```
+$ uv run pytest tests/test_resources.py -k records_who     # 先把 PMET 那份按回 false
+>       assert extract.human_verified is True
+E       AssertionError: assert False is True
+tests\test_resources.py:425: AssertionError
+FAILED tests/test_resources.py::test_the_frozen_extract_records_who_verified_it[pmet-shaakichiuwaanaan-2025]
+================= 1 failed, 1 passed, 28 deselected in 0.76s ==================
+
+$ uv run pytest tests/test_resources.py -k records_who     # 还原后
+2 passed, 28 deselected in 0.17s
+```
+
+一条红、另一条（Pilgangoora）照样绿 —— 参数化确实按份生效，不是一起红。
+
+### 9.5 此刻的全量闸门
+
+```
+$ uv run ruff check .            → All checks passed!
+$ uv run ruff format --check .   → 66 files already formatted
+$ uv run mypy                    → Success: no issues found in 63 source files
+$ uv run pytest -q               → 235 passed, 11 deselected, 4 warnings in 16.03s
+```
+
+用例数仍是 235：守卫那条是**改名 + 改断言**，不是新增或删除，两个参数项都还在。
+
+### 9.6 一件仍待你拍板的事（没有因为这次核对而消失）
+
+工单 05 判定五那个缺口依然开着：**产物上的储量数字不携带"是否已核对"这一位**
+（`ResourceExtract` 信封上没有 `human_verified`）。两份现在都核过了，所以这个缺口的后果
+比昨夜轻 —— 但"日报读者不知道这批数字是否已核对"这件事本身没变。要不要提到正式契约上，
+仍是一个要付代价的决定，留给你。

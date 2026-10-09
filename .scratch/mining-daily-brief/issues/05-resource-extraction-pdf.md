@@ -6,14 +6,16 @@
 
 **Blocked by:** 01
 
-**Status:** needs-human
+**Status:** done
 
 **Category:** enhancement
 
 - [x] `extract_resources` 返回资源量表：项目、品种、报告体系、报告标题、报告日期、行（类别 / 吨位 / 品位 / 品位单位 / 含金属量）、页码引用
 - [x] JORC 与 NI 43-101 两套体系走**同一条**解析路径，只在返回值里标明体系（两者共用 Measured / Indicated / Inferred 分类词）
-- [ ] **⛔ 人工核对卡点（agent 独自做不完，需使用者在场）**：冻结的 ground truth 必须由**真实下载的 PDF 跑解析器后人工核对**得出，**不得引用二手摘要数字**——否则测试就是自证
-      —— 已做到"真下载 + 真解析 + 整理成待核清单"（见下），**核对本身没有做**：`human_verified` 仍是 `false`。这一格按约定留 `[ ]`。
+- [x] **⛔ 人工核对卡点（agent 独自做不完，需使用者在场）**：冻结的 ground truth 必须由**真实下载的 PDF 跑解析器后人工核对**得出，**不得引用二手摘要数字**——否则测试就是自证
+      —— ✅ **2026-10-09 由使用者核对完毕**：两份 PDF 逐行对着页面看过，5 行数字与两处
+      生效日全部相符；`human_verified` 已由 `false` 翻成 `true`，带上核对人与时间。
+      过程与结论见下方「收尾：人工核对的闭合」。
 - [x] 回放模式比冻结值；`network` 标记的用例真下载真解析（完整 PDF 不入库：约 130 MB 且受版权保护，仓库只存抽好的 JSON）
 - [x] **R2 处置落实**：若 Pilbara 的 JORC 直链拿不到，该矿山降级为"数据缺失"由第六节如实记录，**不阻塞本票收尾**
       —— 直链确实拿不到（404 + 403，见下），但**没有降级成"数据缺失"**：改用同公司公开的 CET 材料。偏离了本格的**字面**处置，理由是那个处置的前提是"没有可用的公开文件"，而实测有。
@@ -58,13 +60,16 @@ tests/test_resources.py::test_the_real_pdf_still_parses_to_the_frozen_table[pmet
 uv run python -c "..."   # 见下文清单里的完整命令
 ```
 ```
-pilgangoora-cet-2022.json: 9747460B/44页 sha256=84ababf60f74… 表在第36页 human_verified=False
+pilgangoora-cet-2022.json: 9747460B/44页 sha256=84ababf60f74… 表在第36页 human_verified=True
     Measured 19.0Mt@1.4%->0.3；Indicated 187.0Mt@1.2%->2.2；Inferred 99.0Mt@1.1%->1.0
-pmet-shaakichiuwaanaan-2025.json: 5714740B/48页 sha256=ffc6ca4351b9… 表在第41页 human_verified=False
+pmet-shaakichiuwaanaan-2025.json: 5714740B/48页 sha256=ffc6ca4351b9… 表在第41页 human_verified=True
     Indicated 107.991Mt@1.4%->3.75；Inferred 33.38Mt@1.33%->1.09
 ```
 
-### ⛔ 待人工核对清单（这一格没有被跳过，只是没被人做过）
+（上面两行的 `human_verified` 原记于 2026-10-08 核对之前，是 `False`；2026-10-09 核对
+完毕后翻成 `True`，本块已按当前状态更新。）
+
+### ⛔ 人工核对清单（2026-10-09 已逐行核过）
 
 **要核的东西**：上面那 5 行数字，对着这两份 PDF 逐行看。开工前先读
 `fixtures/resources/*.json` 的注释字段 —— 它们各自记着自己是从哪份文件、哪一页读出来的。
@@ -89,11 +94,36 @@ pmet-shaakichiuwaanaan-2025.json: 5714740B/48页 sha256=ffc6ca4351b9… 表在�
    `ResourceExtract` 信封上没有它）。要不要把它提到产物上（让日报自己写出"这批数字未经人工
    核对"）是一个**设计决定**，我没有替你做 —— 见下「判定五」。
 
-核对完之后要做的事：把 `fixtures/resources/*.json` 里
-`human_verified` 改成 `true`，填 `human_verified_by` / `human_verified_at`。
-`tests/test_resources.py::test_the_frozen_extract_says_it_is_not_human_verified_yet`
-**会因为这个改动而红** —— 那是故意的：它逼你回来把这条测试改成"已核对"的版本，
-而不是让"未核对"的状态在无人察觉的情况下被继承下去。
+### 收尾：人工核对的闭合（2026-10-09）
+
+上面的清单已经被人逐行核过。做法与结论如实记在这里：
+
+1. **核的人与时间**：使用者本人对着两份 PDF 的**真实页面**（不是 JSON 里的
+   `page_text`）逐行看。两份的 5 行数字与两处生效日全部相符。
+2. **JSON 里没有出错的数字。** 核对中途提过一个疑问——PMET 的吨位在 JSON 里是
+   `107.991` 而页面上印的是 `107,991,000`。**那不是错**：`ResourceRow.tonnage_mt`
+   的单位按契约就是**百万吨**（`contracts/resources.py`），登记表声明该页吨位列
+   `scale=1e-6`（`config/reports.py`）。107,991,000 t ÷ 1e6 = 107.991 Mt。
+   对照 Pilgangoora 那页写的是 `Mdmt`，所以它的 `scale` 是默认的 `1.0` —— 同一个
+   字段、两个页面单位，靠声明而不是靠猜。
+3. **比单位更强的一条内证**：PMET 第 41 页自己在分类行上方印着小计
+   （`101,828,000` / `6,163,000`，`13,898,000` / `19,482,000`），两组相加分别是
+   `107,991,000` 与 `33,380,000` —— 与我们要的那两行**加法自洽**。文字抽取后小计与
+   合计的顺序是反的，这条不靠行序、只靠数，正是 `find_total_row` 那套交叉核对的意思。
+4. **改了三个字段（两份一共六处）**：`human_verified` `false → true`、
+   `human_verified_by`、`human_verified_at`（带时区的 ISO-8601）。改动用脚本原地做，
+   避免编辑器把这两份 CRLF 文件的行尾翻掉 —— `git diff --numstat` 显示每个文件
+   **恰好 3 行 + / 3 行 -**。
+5. **那条守卫用例换了个方向守同一件事**，没有删掉。
+   `test_the_frozen_extract_says_it_is_not_human_verified_yet` →
+   `test_the_frozen_extract_records_who_verified_it`：它现在拦的是**重新冻结**——
+   `scripts/extract_resources.py` 每次运行都把字段写回 `false`，谁重跑了脚本又忘了
+   重新核对，这条会红。原来的直觉是"改了这个字段测试就该红"，那份"红"已经兑现过一次
+   （改动的当下它确实红了），兑现之后它就该被改成正确的样子，而不是删掉。
+6. **`test_flipping_the_verified_flag_changes_only_the_note` 也跟着调了方向**：
+   交付物现在两头都要成立（交付的那份必须是"已核对"，把字段按回 `false` 必须变回
+   "未经人工核对"且**数字一个不动**）。只验一个方向的话，这个字段哪天被写成
+   "永远返回已核对"也能全绿。
 
 ### 判定一：表的结构由**人声明**，解析器只做两件事
 

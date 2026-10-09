@@ -6,8 +6,8 @@
    `page_text` 里），断言它重现出冻结的表。这证明的是"解析器没有回归"。
 2. **交叉核对** —— 拿页面**自己印的**合计行、概述句、脚注去对表内各行相加的结果。
    这一组是唯一**不靠自证**的：两边都不是解析器算出来的。
-3. **冻结纪律** —— `human_verified` 必须还是 `false`（人还没核过）、录播缺失必须
-   响亮失败、`-` 不能被读成 0。
+3. **冻结纪律** —— `human_verified` 必须记着**是谁、什么时候**核的（带不出核对人，
+   就等于没人签过字）、录播缺失必须响亮失败、`-` 不能被读成 0。
 4. **故障路径** —— 源拒绝了、回的压根不是 PDF、报告里认不出表，各走各的处置。
 
 第 1 组再强也**不构成"这些数字对"**：页原文与表都是同一个解析器先后读出来的。
@@ -406,43 +406,62 @@ def test_contained_lce_needs_the_carbonate_factor_so_it_is_not_a_universal_rule(
 
 
 @pytest.mark.parametrize("slug", sorted(REPORT_SOURCES))
-def test_the_frozen_extract_says_it_is_not_human_verified_yet(
-    fixture_root: Path, slug: str
-) -> None:
-    """⛔ 卡点就长在这个字段上：人对着 PDF 核过之前，它必须还是 `false`。
+def test_the_frozen_extract_records_who_verified_it(fixture_root: Path, slug: str) -> None:
+    """⛔ 卡点翻过来之后，守的是同一件事：核对必须**留下是谁、什么时候**。
 
-    这条测试**保护的是一个尚未完成的状态**。哪天有人直接把 JSON 里的字段抄成
-    `true` 而不去核对，它会当场变红 —— 这正是它存在的意义。
+    这条的前身是 `test_the_frozen_extract_says_it_is_not_human_verified_yet` ——
+    它保护的是"人还没核过"那个状态，2026-10-09 两份都核完了，于是改成从另一头守：
+    `scripts/extract_resources.py` **每次运行都把 `human_verified` 写回 `false`**，
+    所以谁要是重跑了那个脚本又忘了重新核对，这条会当场变红。
+
+    只断言 `True` 不够：核对人与时间就是这个字段的全部内容，缺了它们，"已核对"
+    就等于一句没有凭证的自称。所以两边一起验，且时间必须是**带时区**的 ISO-8601 ——
+    一个随手写的字符串不该被当成时间戳收下。
     """
     source = REPORT_SOURCES[slug]
     extract = _frozen(fixture_root, source)
     payload = _payload(fixture_root, source)
 
-    assert extract.human_verified is False
-    assert payload["human_verified"] is False
-    assert payload["human_verified_by"] is None and payload["human_verified_at"] is None
-    assert "未经人工核对" in extract.note and "不构成事实" in extract.note
+    assert extract.human_verified is True
+    assert payload["human_verified"] is True
+    assert extract.note == "已人工核对", "标记翻了但说明那句话没跟着走"
+    assert "未经人工核对" not in extract.note
+
+    verified_by = payload["human_verified_by"]
+    assert isinstance(verified_by, str) and verified_by.strip(), "核对人这一栏是空的"
+
+    stamped = str(payload["human_verified_at"])
+    parsed = datetime.fromisoformat(stamped)
+    assert parsed.tzinfo is not None, f"{slug} 的核对时间没带时区：{stamped!r}"
 
 
 def test_flipping_the_verified_flag_changes_only_the_note(
     tmp_path: Path, fixture_root: Path
 ) -> None:
-    """把标记翻成 `true`，说明就该跟着变 —— 否则那个字段是个装饰品。
+    """标记只决定说明那句话，**不动数字** —— 两个方向都要成立。
 
-    同时断言数字**没被改动**：它记的是"谁读过这份结果"，不是"读出来是什么"。
+    交付物里两份现在都是 `true`，所以"翻"的方向换成了 `true → false`；同时把另一头
+    也钉住：交付物本身读出来必须是"已人工核对"。只验一个方向的话，这个字段哪天被写成
+    "永远返回已核对"（比如 note 不再读字段），交付物那条照样全绿。
+
+    数字没被改动这一条是重点：它记的是"谁读过这份结果"，不是"读出来是什么"。
     """
     source = PILBARA_CET
+    shipped = _frozen(fixture_root, source)
+    assert shipped.human_verified is True, "交付物这一份此刻应当是已核对的"
+    assert shipped.note == "已人工核对"
+
     payload = _payload(fixture_root, source)
-    payload["human_verified"] = True
+    payload["human_verified"] = False
     target = tmp_path / "resources"
     target.mkdir()
     (target / f"{source.slug}.json").write_text(json.dumps(payload, ensure_ascii=False), "utf-8")
 
-    verified = load_frozen_extracts(target)[0]
+    unverified = load_frozen_extracts(target)[0]
 
-    assert verified.human_verified is True
-    assert verified.note == "已人工核对"
-    assert verified.table == _frozen(fixture_root, source).table
+    assert unverified.human_verified is False
+    assert "未经人工核对" in unverified.note and "不构成事实" in unverified.note
+    assert unverified.table == shipped.table
 
 
 async def test_a_pdf_that_was_never_frozen_fails_loudly_instead_of_going_to_the_network(
