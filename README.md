@@ -1,11 +1,11 @@
 # 矿权日报 Agent
 
-[![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci.yml)
+[![CI](https://github.com/22145301/mining-brief-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/22145301/mining-brief-agent/actions/workflows/ci.yml)
 
 > ⏱ **只想快点跑起来？** 直接看 [`RUN.md`](RUN.md) —— clone 到产出日报，5 分钟。
 >
-> badge 里的 `OWNER/REPO` 是**全仓库唯一需要替换的占位**：badge 指向 GitHub 上的
-> Actions 结论，而本仓库当前没有 git remote（还没推上去）。推之前替换一次即可。
+> badge 指向本仓库 GitHub Actions 上的 CI 结论（[`ci.yml`](.github/workflows/ci.yml)：
+> 四个闸门，以及专门再跑一遍的 stdio 真子进程那一档）。
 
 对系统说一句自然语言（如"给我生成一份关于 Pilbara 锂矿的今日简报"），拿到一份 Markdown 矿权日报：**每个事实都能回溯到原始来源，缺什么也明说。**
 
