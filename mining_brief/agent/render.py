@@ -10,29 +10,91 @@
 
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime
 from pathlib import Path
 
 from mining_brief.agent.state import BriefState
+from mining_brief.config.archive import ARCHIVE
 from mining_brief.config.logging import get_logger
-from mining_brief.contracts import BriefResult, Citation, Section
+from mining_brief.contracts import BriefResult, Citation, Refusal, ReportScope, Section
 from mining_brief.contracts.brief import SECTION_TITLES
 
 log = get_logger(__name__)
 
 DEFAULT_OUTPUT_DIR = "briefs"
 
+#: 显式点名的矿山超过这个数，文件名就退成 `4-mines` —— 见 `brief_slug`。
+_MAX_NAMED_MINES = 3
+
+#: 拒答那份文件名里短哈希取几位。
+_HASH_LEN = 8
+
 #: `Citation.kind` → 来源清单里的中文标签。
 _KIND_ZH: dict[str, str] = {"news": "新闻", "price": "价格", "resource": "技术报告"}
 
 
-def brief_filename(now: datetime) -> str:
-    """日报文件名。
+def brief_slug(*, scope: ReportScope | None, refusal: Refusal | None, request_text: str) -> str:
+    """这份日报覆盖了**什么** —— 文件名里日期之后的那一段。
 
-    用**数据时点**（回放时是 fixture 锚点）而不是系统时钟 —— 否则同一份 fixture
-    在不同日子跑出来的文件名会变，产物就不确定了（ADR-0002）。
+    文件名要回答的是"这份日报是什么"，不是"我什么时候按的回车"。所以身份取自
+    **范围**：问了哪几座矿、窗口多长。这样两个不同的问题**永远不会撞名**，而撞名
+    恰好只发生在"范围完全相同"的时候 —— 那时两份产物本来就该是同一份，覆盖是对的。
+    按日期命名做不到这一点：同一天问两座矿会落进同一个文件，后问的静默盖掉先问的。
+
+    四种形态：
+
+    - 拒答 → `refused-<请求文本的短哈希>`；
+    - 覆盖整个档案 → `all`（最常见的那一问，也最该短）；
+    - 点名了几座矿 → `pilgangoora-7d`（矿与矿之间用 `+` 接）；点名的矿**超过三座**
+      就退成 `4-mines` —— 名字是给人认的，塞四个 id 进去就没人认了。
+
+    窗口一律写出来（`-7d`），**不因为等于默认值就省略** —— 省了它，读者只能靠猜
+    "没有这段 = 默认 7 天"，而这个仓库的一贯做法是把事实写出来让人看，不让人推断。
+
+    **判"是不是拒答"必须看 `refusal`，不能看 `scope` 是不是 `None`。** 这条是端到端
+    跑出来的教训：越界那条拒答（"帮我预测一下明天铜价会涨吗"）会先由品种推出三座
+    铜矿，`nodes.resolve_entities` 因此给出了一个**非空**的 `scope`（只有存在未覆盖
+    项时它才是 `None`），于是按 `scope is None` 判断会把一条拒答命名成
+    `kamoa-kakula+los-pelambres+quellaveco-7d` —— 一份看起来跟真日报一模一样的
+    拒答产物。拒答还要按请求文本哈希，因为两次**不同**的越界请求若同名，就又把这次
+    要修的 bug 请回来了；请求文本是那时唯一稳定的身份（它本身就是输入）。
     """
-    return f"brief-{now:%Y-%m-%d}.md"
+    if refusal is not None:
+        digest = hashlib.sha256(request_text.encode("utf-8")).hexdigest()
+        return f"refused-{digest[:_HASH_LEN]}"
+
+    if scope is None:
+        # `check_scope` 保证到不了这里：它要么给出拒答，要么给出范围。真到了这里，
+        # 说明上游有 bug —— 与其编一个像模像样的文件名把 bug 藏进产物，不如炸。
+        raise ValueError("既没有拒答、又没有范围 —— 这不该发生，说明上游有 bug")
+
+    ids = sorted(entry.id for entry in scope.entries)
+    if set(ids) == {entry.id for entry in ARCHIVE}:
+        name = "all"
+    elif len(ids) <= _MAX_NAMED_MINES:
+        name = "+".join(ids)
+    else:
+        name = f"{len(ids)}-mines"
+    return f"{name}-{scope.window_days}d"
+
+
+def brief_filename(now: datetime, *, slug: str, include_run_time: bool = False) -> str:
+    """日报文件名：`brief-<日期>[-<运行时刻>]-<范围>.md`。
+
+    **日期取数据时点，不取系统时钟** —— 否则同一份 fixture 每天跑出来的文件名都
+    不一样，产物就不确定了（ADR-0002）。实时模式下 `now` 本来就是运行时刻，所以
+    那个括号里的字段是**同一个值**的两种精度，不是第二个时钟。
+
+    实时模式**额外**带上运行时刻（`%H%M%S`）：实时的产物**不可复现**（数据源每次给
+    的不一样），一天之内跑两遍就是两张不同的世界快照，该各留各的。回放不加这个字段
+    —— 那里 `now` 是冻结锚点，写上去只会得到一个看起来像运行时刻、其实不是的常量，
+    而"看起来像真的"正是这个项目最不肯要的东西。
+
+    时刻口径是 **UTC**（与数据时点同源），不是本地时间。
+    """
+    stamp = f"{now:%Y-%m-%d-%H%M%S}" if include_run_time else f"{now:%Y-%m-%d}"
+    return f"brief-{stamp}-{slug}.md"
 
 
 def _output_dir(state: BriefState) -> Path:
@@ -44,8 +106,22 @@ def _output_dir(state: BriefState) -> Path:
 
 def build_result(state: BriefState) -> BriefResult:
     """把 state 冻成 `BriefResult`。不碰磁盘。"""
-    path = str(_output_dir(state) / brief_filename(state["now"]))
+    settings = state.get("settings")
     refusal = state.get("refusal")
+    # 实时才带运行时刻：那里的 `now` 是真时钟，产物本质上是**不可复现**的一张快照
+    # （正因如此 `live-briefs/` 才进 `.gitignore`）；回放的 `now` 是冻结锚点，带上
+    # 它只会得到一个假装是运行时刻的常量。
+    live = settings is not None and settings.data_mode == "live"
+    name = brief_filename(
+        state["now"],
+        slug=brief_slug(
+            scope=state.get("scope"),
+            refusal=refusal,
+            request_text=state.get("request_text", ""),
+        ),
+        include_run_time=live,
+    )
+    path = str(_output_dir(state) / name)
 
     if refusal is not None:
         # 拒答路径：没有六节、没有来源清单 —— 产物就是那段话说清楚的东西。

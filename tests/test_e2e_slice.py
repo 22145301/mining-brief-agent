@@ -225,7 +225,15 @@ async def test_replay_clock_comes_from_the_fixture_anchor_not_the_system_clock(
     result = await _run(settings, fixture_root, canonical_request)
 
     anchor = FixtureStore(fixture_root).anchor_at
-    assert Path(result.output_path).name == f"brief-{anchor:%Y-%m-%d}.md"
+    name = Path(result.output_path).name
+
+    # 日期段来自锚点 —— 这是这个用例原本要钉的事。
+    assert name.startswith(f"brief-{anchor:%Y-%m-%d}-")
+    # 锚点里的时刻（17:01:57）**不进**文件名：回放不带运行时刻，否则那一段会是一个
+    # 看起来像运行时刻、其实只是常量的东西（见 `render.brief_filename`）。
+    assert "170157" not in name
+    # 题目原句点名了 Pilbara，文件名要能说明这是哪一份 —— 名字的职责是"这是什么"。
+    assert name.endswith("-pilgangoora-7d.md")
 
 
 # ---------------------------------------------------------------------------

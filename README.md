@@ -45,6 +45,11 @@ uv run pytest                                                 # 测（默认离�
 不装 uv 也行：`docker compose up` 跑同一件事（跑完即退，产物落在挂载出来的 `./briefs/`，
 与本地跑逐字节相同 —— 镜像里跑的也是回放）。两条路的取舍见 [`RUN.md`](RUN.md)。
 
+产物名是 `brief-<数据时点>-<范围>.md`（例：`brief-2026-10-08-pilgangoora-7d.md`）。名字里
+**既有日期也有范围**是刻意的：日期来自数据时点（回放时是锚点，不由系统时钟决定），范围决定
+这是哪一份日报 —— 于是**同一天问不同的问题各落一份、不会互相覆盖**，而范围相同时重合恰好
+等价于"内容相同"。取舍见 [ADR-0011](docs/adr/0011-brief-filename-carries-its-scope.md)。
+
 默认模式**不需要任何 API key、不联网、结果确定**。代价写在明面上：**回放只认录过的输入**，
 换一句没录过的话它会报 `LLMReplayMiss` 而不是偷偷去调模型（ADR-0009）——离线可问的就是
 `scripts/record_llm.py` 里那四条样例句（一句出报、一句整档案出报、两句拒答）。
@@ -205,3 +210,4 @@ LME 官网整站挂在 Cloudflare 后面：`httpx`、`urllib`、`curl` 直取**�
 | [0008](docs/adr/0008-single-package-and-thin-mcp-servers.md) | 单包布局，MCP server 只做薄壳 |
 | [0009](docs/adr/0009-llm-replay-keyed-by-input-hash.md) | LLM 录播按输入数据哈希索引，查不到就报错 |
 | [0010](docs/adr/0010-price-point-publisher-field.md) | `PricePoint` 加 `publisher`：合约所在的交易所未必是发布方 |
+| [0011](docs/adr/0011-brief-filename-carries-its-scope.md) | 日报文件名带范围：同一天问两个问题不再互相覆盖 |
