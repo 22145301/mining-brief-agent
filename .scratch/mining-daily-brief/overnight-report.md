@@ -395,6 +395,11 @@ NI 43-101 的矿上确实是**引错法条**。
    **S-K 1300** 而非 JORC（agent 填的 `standard` 列自己标了不准）、若干中文公司名是**音译非官方**、
    Mary River 只有 **Wayback 快照**、Vizcachitas 的资源量表是**位图**抽不出文本。
 
+   **处置（10-09 早上）**：清单已整理成同目录的
+   [`archive-expansion-candidates.md`](archive-expansion-candidates.md) 备查 —— **未采纳**，
+   任何一行都没进 `config/archive.py`。那份文件每行都带"体系 / 可抽性 / 直链稳定性"三项
+   待核标注（含两处 S-K 1300 被 agent 误填成 JORC），并写明扩档案要重录 LLM、重验产物哈希的代价。
+
 ### 8.5 一个意外收获：对工单 06 的独立佐证
 
 铜那路 agent 自己去下载了 Kamoa-Kakula 的报告，报回来：
