@@ -28,6 +28,12 @@
 | ASX GN31 | ASX Listing Rules Guidance Note 31 — Reporting on Mining Activities | <https://www.asx.com.au/documents/rules/gn31_reporting_on_mining_activities.pdf> | 166253 | 见下"未记哈希"说明 |
 | NI 43-101 | CSA Notice: Repeal and Replacement of National Instrument 43-101（含 Instrument 与 Companion Policy 全文） | <https://nssc.novascotia.ca/sites/default/files/docs/csanotice_43-101new08042011.pdf> | 914001 | `82cc29e680ac249fcc38b1a07b17b5cdf568b6ea171903aff1c5af9dea13f248` |
 
+**版本现行性（2026-10-09 核实）**：JORC 官网 `code-update` 页截至 **2026-08** 的最后一次更新
+显示，新版 JORC Code 仍在评审、**尚未生效** —— 原文 `Once the Code is finalised … after an
+agreed transition period, operation of the new Code will commence.`。所以本文件引的
+**2012 Edition 仍是现行版本**（其生效日见正本第 10–11 行：`Effective 20 December 2012 and
+mandatory from 1 December 2013`）。**若将来新版生效，§2 中 JORC 的引文（R5）须重新核对。**
+
 **哈希可复验（我自己复验过）**：上表三份均在 2026-10-09 于本机**重新下载**并比对，
 字节数与 sha256 逐位一致（命令见 §7）。所以"出处可点开"不是承诺，是已验证的事实。
 
@@ -76,8 +82,14 @@ PRD 未写明的：**"合资格人署名"那组要求不在 5.16，而在 5.22**
   `table.standard` 为 `NI_43_101`。
 - `applies` 为假时该条不出现（储量节为空 → 不触发，符合"上游降级时该节留空是正常路径"）。
 - `triggered_by`：形如 `"储量表含 Inferred 与 Indicated（NI 43-101，<report_title>）；两者不得相加"`。
-- **为什么按 `standard` 分流**：这条的口径是 NI 43-101 的。JORC 体系下的对应物是
-  Clause 12（见 R5），两者的"不得混用"是同一个意思但**不是同一句话**，混引会引错。
+- **为什么按 `standard` 分流**：这条的口径是 NI 43-101 的，不该套到 JORC 的矿上。
+  JORC 体系下**最接近**的是 Clause 26（第 14–15 页），但它**不是同一条规则** ——
+  JORC 原文是 `Categories must not be reported in a combined form unless details for the
+  individual categories are also provided.`（合并报告**可以**，只要同时分列各类别），
+  另有 `Mineral Resources must not be aggregated with Ore Reserves.`；而 NI 的 `(c)` 是
+  **直接禁止**把 Inferred 并入其他类别。两者连"允不允许合并"都不同，所以混引不是措辞
+  问题，是把对这座矿没有管辖权的规则说成有。（注：本文件早先把 JORC 的对应物记成
+  Clause 12 —— 那是 R5 的**术语**条款，不是这一条；2026-10-09 据正本更正。）
   分流同时也是工单 07 可断言的地方：给一张 `standard=NI_43_101` 的表 → R1 出现、
   R5 不出现；给一张 `standard=JORC` 的表 → 反之。
 
@@ -196,7 +208,8 @@ PRD 未写明的：**"合资格人署名"那组要求不在 5.16，而在 5.22**
 
 **触发条件**
 
-- `applies`：存在 `news.items[*]`，其 `title + summary` 的**同一句**内同时出现
+- `applies`：**本次范围内存在按 `JORC` 体系披露的矿山**（读档案条目的 `standard`），
+  **且**存在 `news.items[*]`，其 `title + summary` 的**同一句**内同时出现
   (i) 资源量类词（`inferred` / `indicated` / `measured` / `资源量`）与
   (ii) 储量类词（`ore reserve` / `proven` / `probable` / `reserve` / `储量`），
   且该句中资源量类词出现在储量类词**之前**（"Inferred ... reserve" 这个顺序才是
@@ -205,8 +218,13 @@ PRD 未写明的：**"合资格人署名"那组要求不在 5.16，而在 5.22**
 - **这是本清单里唯一一条"负向"规则** —— 它报的是**信息源**的错，不是我们的。
   因此它在产物里的措辞必须说清是"来源如此表述"，不能让读者以为我们在指控某公司。
 - 触发频率预期很低（真错才触发）。低频是它的优点：这一节一旦有内容，读者会认真读。
-- `standard` 分流：这条引 JORC 原文。NI 43-101 体系下语义相同但不引这句
-  （`s.2.2(a)` 是它的加拿大对应物，见 R1 的引文）。
+- **为什么 `applies` 里带了 `standard` 分流**：这条引的是 JORC 原文，不属于 NI 43-101
+  体系（NI 的加拿大对应物是 `s.2.2(a)`，见 R1 的引文）。给一座 NI 43-101 的矿引 Clause 12，
+  引出来的是一份对这座矿**没有管辖权**的法条 —— 所以这条在 NI 范围里必须沉默。
+- **判据读档案的 `standard`，不读抽到的那张表的 `standard`**（与 R1 不同，刻意如此）：
+  R1 的判据本来就在表上（"同一张表里 Inferred 与 Indicated 并存"），而 R5 判的是
+  **这座矿按哪套体系披露**。二者是两件事 —— Fortescue 属"JORC 体系、但不单独发项目级
+  技术报告"那一档（§3 末行），按"抽没抽到表"判会让它的 R5 永远静默。
 
 **逐字原文**（JORC 2012, Clause 12）
 
@@ -313,10 +331,21 @@ for src, dst in [('jorc2012.pdf','jorc.txt'), ('ch5.pdf','ch5.txt'), ('ni43101-c
 "
 
 # 3. 逐条核对本文件的 verbatim
-grep -n "must only use the terms set out in Figure 1"                          jorc.txt
-grep -n "does not add inferred mineral resources to the other categories"      ni.txt
-grep -n "too speculative geologically"                                          ni.txt
-grep -n "low level of geological confidence associated with inferred mineral"   ch5.txt
+#    **别用 grep 直接搜整句**：抽出来的文本会在句子中间换行，跨行那条（JORC Clause 12）
+#    整句搜索必然落空 —— 本机实测第 1 条 grep 是 0 命中、去掉换行后 1 命中。
+#    下面按本文件末尾"字母序列一致、忽略空白"的口径比对，四条一起报 OK / MISS。
+uv run python - <<'PY'
+import pathlib, re
+squash = lambda t: re.sub(r"\s+", " ", t)
+for src, needle in [
+    ("jorc.txt", "must only use the terms set out in Figure 1"),
+    ("ni.txt", "does not add inferred mineral resources to the other categories"),
+    ("ni.txt", "too speculative geologically"),
+    ("ch5.txt", "low level of geological confidence associated with inferred mineral"),
+]:
+    found = squash(needle) in squash(pathlib.Path(src).read_text("utf-8"))
+    print("OK  " if found else "MISS", src, "|", needle)
+PY
 ```
 
 **已知的提取伪影**：JORC 那份会吃掉 `ff`/`fi` 连字（`E ective`），ASX 那份会在词中插入
